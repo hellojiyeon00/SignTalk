@@ -1,0 +1,136 @@
+/* frontend/assets/auth.css */
+
+/* 1. 폰트 불러오기 (구글 폰트) */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+
+/* 2. 전역 변수 설정 (색상 관리) */
+:root {
+    --primary-color: #007bff;       /* 메인 파란색 */
+    --primary-hover: #0056b3;       /* 버튼 올렸을 때 */
+    --bg-color: #f0f2f5;            /* 배경 회색 */
+    --text-color: #333333;          /* 기본 글자색 */
+    --error-color: #ff4d4d;         /* 에러 빨간색 */
+    --error-bg: #fff0f0;            /* 에러 배경 연한 빨강 */
+    --white: #ffffff;
+    --border-color: #cccccc;
+}
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    
+    /* 중앙 정렬 & 화면 채우기 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh; /* height 대신 min-height 권장 (내용이 넘쳐도 짤리지 않음) */
+    margin: 0;
+}
+
+.container {
+    background-color: var(--white);
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    width: 350px;
+}
+
+/* --- 입력 폼 스타일 --- */
+.input-group {
+    margin-bottom: 15px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+/* [핵심 리팩토링] 
+   input 태그 전체에 100%를 주면 라디오 버튼까지 커지는 문제가 발생합니다.
+   따라서 :not()을 사용하여 라디오/체크박스는 제외하고 100%를 줍니다.
+   이렇게 하면 !important를 쓰지 않아도 됩니다. 
+*/
+.input-group input:not([type="radio"]):not([type="checkbox"]) {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    box-sizing: border-box;
+    font-family: inherit; /* 폰트 상속 */
+}
+
+/* --- 버튼 스타일 --- */
+.btn-primary {
+    width: 100%;
+    padding: 12px;
+    background-color: var(--primary-color);
+    color: var(--white);
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: background-color 0.2s; /* 부드러운 색상 변경 효과 */
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+/* --- 라디오 버튼 스타일 --- */
+.radio-container {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: normal;
+}
+
+/* !important 제거됨: 위에서 width: 100%를 제외했으므로 자연스럽게 적용됨 */
+.radio-label input[type="radio"] {
+    width: auto; 
+    margin-right: 8px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.radio-text {
+    font-size: 16px;
+    color: var(--text-color);
+}
+
+/* --- 에러 메시지 스타일 --- */
+.input-error {
+    border-color: var(--error-color) !important;
+    background-color: var(--error-bg);
+}
+
+.error-message {
+    color: var(--error-color);
+    font-size: 12px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    display: none; /* 평소엔 숨김 */
+    font-weight: bold;
+}
+
+.error-message.show {
+    display: block; /* 에러 발생 시 보임 */
+    animation: shake 0.3s; /* 살짝 흔들리는 애니메이션 효과 (선택 사항) */
+}
+
+/* (보너스) 에러 시 흔들리는 애니메이션 */
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+}
