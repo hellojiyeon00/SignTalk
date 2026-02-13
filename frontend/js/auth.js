@@ -77,6 +77,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     localStorage.setItem("accessToken", data.access_token);
                     localStorage.setItem("userId", userId);
                     localStorage.setItem("userName", data.user_name || userId);
+
+                    // 잠시 수정 (메세지 sender 구분 관련) (소영)
+                    // 서버에서 내려주는 is_deaf 값을 source of truth로 사용
+                    const isDeaf = Boolean(data.is_deaf);
+
+                    localStorage.setItem("isDeaf", String(isDeaf));
+                    localStorage.setItem("role", isDeaf ? "deaf" : "hearing");
+
                     window.location.href = "index.html";
                 } else {
                     const errData = await response.json();

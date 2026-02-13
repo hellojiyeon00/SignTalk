@@ -2,13 +2,133 @@
 
 채팅방 관리 및 메시지 관련 비즈니스 로직
 """
+# KoBART에서 생성한 Gloss Token 전처리 후 DB Word-Video url 연결을 위해 추가 (소영)
+from __future__ import annotations
+
+import logging
+import hashlib
+from typing import Any, Dict, Optional
+
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+# 추가 (소영)
+from sqlalchemy import bindparam
 from fastapi import HTTPException
 
+# KoBART에서 생성한 Gloss Token 전처리 후 DB Word-Video url 연결을 위해 추가 (소영)
+from app.services.model_client import ModelClient
+from app.services.text_preprocessor import normalize_input_text
+from app.services.gloss_preprocessor import clean_gloss
+from app.core.database import SessionLocal
+
+logger = logging.getLogger(__name__)
+
+# text 확인을 위해 추가 (소영)
+# 해시 계산용 유틸 함수
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 class ChatService:
     """채팅 관련 비즈니스 로직 처리"""
+
+    # KoBART에서 생성한 Gloss Token 전처리 후 DB Word-Video url 연결을 위해 추가 (소영)
+    @staticmethod
+    def gloss_to_urls(gloss: str) -> tuple[list[str], list[str]]:
+        """
+        cleaned gloss -> corpus 테이블을 조회하여 url_path 리스트를 만든다.
+        - 시간 토큰(f:1 등)은 매핑 제외(보존은 gloss 문자열에서만)
+        - 매핑 실패 토큰은 miss로 반환
+        """
+        if not isinstance(gloss, str) or not gloss.strip():
+            return [], []
+
+        # 여기서 clean_gloss를 먼저 적용 (매핑률/미스 일관성 확보)
+        gloss_clean = clean_gloss(gloss)
+        if not gloss_clean:
+            return [], []
+
+        tokens = [t for t in gloss_clean.split() if t and not t.startswith("f:")]
+        if not tokens:
+            return [], []
+
+        # DB 조회는 중복 제거해서 효율화
+        unique_tokens = list(dict.fromkeys(tokens))
+
+        db = SessionLocal()
+        try:
+            rows = db.execute(
+                text("""
+                    SELECT word_name, url_path
+                    FROM multicampus_schema.corpus
+                    WHERE word_name IN :tokens
+                """).bindparams(bindparam("tokens", expanding=True)),
+                {"tokens": unique_tokens}
+            ).fetchall()
+
+            mapping = {r[0]: r[1] for r in rows if r and r[0] and r[1]}
+
+            urls: list[str] = [mapping[t] for t in tokens if t in mapping]
+            miss = [t for t in tokens if t not in mapping]
+
+            if miss:
+                logger.info(f"[URL MAP] miss={miss[:10]} (total={len(miss)})")
+
+            return urls, miss
+
+        finally:
+            db.close()
+
+
+    @staticmethod
+    def text_to_gloss_and_urls_sync(text: str) -> Dict[str, Any]:
+        """
+        (동기) 텍스트를 모델서버에 보내 gloss를 받고, URL 리스트까지 반환한다.
+        socekets.py에서 run_in_threadpool로 호출하기 위한 형태. 
+        """
+        client = ModelClient()
+        clean_text = normalize_input_text(text)
+
+        # 모델 입력은 normalize_input_text까지만 적용한 텍스트를 그대로 사용
+        # (문장 분리/점 제거/하드컷 금지)
+        model_text = clean_text
+
+        logger.info(
+            "[text_to_gloss_sync] raw_len=%d clean_len=%d model_len=%d raw_hash=%s clean_hash=%s model_hash=%s clean_preview=%r model_preview=%r",
+            len(text),
+            len(clean_text),
+            len(model_text),
+            _sha256(text),
+            _sha256(clean_text),
+            _sha256(model_text),
+            clean_text[:80],
+            model_text[:80]
+        )
+        logger.info(
+            "[client->server] has_dot_clean=%s has_dot_model=%s clean_preview=%r model_preview=%r",
+            ("." in clean_text),
+            ("." in model_text),
+            clean_text[:120],
+            model_text[:120]
+        )
+
+        # 멀티 model_server 표준 호출로 전환
+        infer_res = client.infer_sync("kobart", model_text)
+
+        # 지금은 infer 표준 응답(ok/task/result) 흐름으로 통일
+        result = infer_res.get("result") if isinstance(infer_res, dict) else None
+        gloss: Optional[str] = result.get("gloss") if isinstance(result, dict) else None
+        meta = result.get("meta") if isinstance(result, dict) and isinstance(result.get("meta"), dict) else None
+        
+        # 모델 응답 gloss 후처리 (토큰 정제)
+        if not gloss:
+            return {"gloss": None, "urls": [], "miss": [], "meta": meta}
+
+        gloss_clean = clean_gloss(gloss)
+        urls, miss = ChatService.gloss_to_urls(gloss_clean)
+
+        # 반환 gloss는 "원본"이 아니라 정제된 gloss를 쓰는 게 downstream에 유리
+        # (원본이 필요하면 gloss_raw로 별도 추가하는 방식 추천)
+        return {"gloss": gloss_clean, "urls": urls, "miss": miss, "meta": meta}
 
     @staticmethod
     def search_users(db: Session, my_id: str, name: str = None, member_id: str = None):
