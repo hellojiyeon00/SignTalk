@@ -1,0 +1,156 @@
+/* frontend/assets/landing.css */
+
+/* 1. 폰트 불러오기 (필수) */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+
+/* 2. 변수 설정 (브랜드 컬러 통합) */
+:root {
+    --primary-color: #007bff;       /* 메인 파란색 */
+    --primary-hover: #0056b3;       /* 버튼 호버 색상 */
+    --text-main: #333333;           /* 진한 글자 */
+    --text-sub: #666666;            /* 연한 글자 (설명) */
+    --white: #ffffff;
+    --border-color: #cccccc;        /* 테두리 색상 */
+    --bg-gradient-start: #f5f7fa;   /* 배경 그라데이션 시작 */
+    --bg-gradient-end: #c3cfe2;     /* 배경 그라데이션 끝 */
+}
+
+/* 3. 기본 설정 */
+body {
+    margin: 0;
+    font-family: 'Noto Sans KR', sans-serif;
+    color: var(--text-main);
+    overflow-x: hidden; /* 가로 스크롤 생김 방지 */
+}
+
+/* 모든 요소의 크기 계산을 테두리 포함으로 변경 (레이아웃 깨짐 방지) */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+/* --- 상단 헤더 --- */
+header {
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--white);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08); /* 그림자 농도 조절 */
+    position: sticky; /* 스크롤 내려도 상단에 붙어있게 설정 (선택사항) */
+    top: 0;
+    z-index: 1000; /* 다른 요소보다 위에 오도록 */
+}
+
+/* 로고 영역 */
+.logo-area {
+    font-size: 1.5rem;
+    font-weight: 700; /* bold 대신 숫자 사용 권장 */
+    color: var(--primary-color);
+    cursor: pointer; /* 클릭 가능한 느낌 */
+}
+
+/* 버튼 그룹 */
+.auth-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+/* 공통 버튼 스타일 */
+.auth-buttons a,
+.auth-buttons button {
+    text-decoration: none;
+    padding: 8px 18px; /* 좌우 여백 살짝 늘림 */
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-block;
+}
+
+/* 1. 로그인 버튼 (Outline 스타일) */
+.btn-login {
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    background-color: transparent;
+}
+
+.btn-login:hover {
+    background-color: #f8f9fa;
+    border-color: #999;
+}
+
+/* 2. 회원가입 버튼 (Filled 스타일) */
+.btn-signup {
+    color: var(--white);
+    background-color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+}
+
+.btn-signup:hover {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+    transform: translateY(-1px); /* 살짝 떠오르는 효과 */
+    box-shadow: 0 2px 5px rgba(0,123,255,0.3); /* 파란 그림자 */
+}
+
+/* 3. 로그아웃 버튼 (회색 Outline 스타일) */
+.btn-logout {
+    color: var(--text-sub);         /* 글자색: 회색 */
+    border: 1px solid var(--border-color); /* 테두리: 연한 회색 */
+    background-color: var(--white); /* 배경: 흰색 */
+    cursor: pointer;                /* 마우스 올리면 손가락 모양 */
+}
+
+.btn-logout:hover {
+    background-color: #f1f3f5;      /* 호버 시 배경 약간 어둡게 */
+    border-color: #999;            /* 테두리 진하게 */
+    color: #333;                   /* 글자 진하게 */
+}
+
+/* --- 메인 소개 구역 (Hero Section) --- */
+.hero {
+    /* height: 80vh 대신 min-height 사용 권장 (내용이 많아지면 늘어나도록) */
+    min-height: 80vh; 
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+    text-align: center;
+    padding: 20px; /* 모바일에서 글자가 벽에 붙지 않게 여백 추가 */
+}
+
+.hero h1 {
+    font-size: 3rem;
+    margin: 0 0 20px 0; /* margin-bottom만 남기고 초기화 */
+    color: var(--text-main);
+    line-height: 1.2; /* 줄 간격 조정 */
+}
+
+.hero p {
+    font-size: 1.25rem;
+    color: var(--text-sub);
+    margin: 0 0 40px 0;
+    max-width: 600px; /* 글자가 너무 옆으로 퍼지지 않게 제한 */
+    line-height: 1.6;
+}
+
+/* (보너스) 메인 화면 중앙에 '시작하기' 큰 버튼이 필요할 때 사용하세요 */
+.hero-btn {
+    padding: 15px 40px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--white);
+    background-color: var(--primary-color);
+    border: none;
+    border-radius: 50px; /* 둥근 버튼 */
+    text-decoration: none;
+    transition: transform 0.2s, background-color 0.2s;
+    box-shadow: 0 4px 15px rgba(0,123,255,0.4);
+}
+
+.hero-btn:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,123,255,0.5);
+}
