@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: bootcamp_local_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bootcamp_chat
+      POSTGRES_USER: bootcamp
+      POSTGRES_PASSWORD: bootcamp_pw
+      TZ: Asia/Seoul
+    ports:
+      - "5433:5432"
+    volumes:
+      - bootcamp_pgdata:/var/lib/postgresql/data
+
+volumes:
+  bootcamp_pgdata:
