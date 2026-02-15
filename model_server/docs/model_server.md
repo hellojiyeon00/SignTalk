@@ -1,31 +1,34 @@
-# =========================================
-# Model Server Setup Guide (Multi-Model)
-# Python 3.9.x required
-# AWS EC2 Ubuntu + GPU 기준
-# =========================================
+# 🚀 Model Server Setup Guide (Multi-Model)
 
-본 문서는 부트캠프 프로젝트의 `model_server`
-(멀티 모델 단일 FastAPI 서버) 운영 가이드이다.
+> Python 3.9.x required  
+> AWS EC2 Ubuntu + GPU 기준
 
-지원 모델 (예시):
-- KoBART (text -> gloss)
-- LSTM
-- FastText
-- LLM
+본 문서는 **부트캠프 프로젝트의 model_server (멀티 모델 단일 FastAPI 서버)** 운영 가이드이다.
 
 ---
 
-## 1. (권장) Python 버전 확인
+## 🧠 Supported Models
+
+| Model      | Description |
+|------------|------------|
+| KoBART     | text → gloss |
+| LSTM       | sequence model |
+| FastText   | classification / embedding |
+| LLM        | local or external API wrapper |
+
+---
+
+# 1️⃣ Python Environment
+
+## Python 버전 확인
 
 ```bash
 python --version
 ```
 
-Python 3.9.x 가 아니면 아래 예시처럼 가상환경 생성.
+Python 3.9.x가 아니라면 가상환경 생성.
 
----
-
-## 2. 가상환경 생성 및 활성화 (venv 예시)
+## 가상환경 생성 (venv)
 
 ```bash
 python3.9 -m venv venv
@@ -34,82 +37,68 @@ source venv/bin/activate
 
 ---
 
-## 3. PyTorch 설치 (GPU 환경)
+# 2️⃣ PyTorch 설치 (GPU 환경)
 
-[중요]  
-torch는 CUDA 버전에 맞춰 설치해야 한다.
+> ⚠ torch는 CUDA 버전에 맞게 설치해야 한다.
 
-### 1) CUDA 버전 확인
+## CUDA 버전 확인
 
 ```bash
 nvidia-smi
 ```
 
-### 2) 예: CUDA 11.6 환경 (예시)
+## 예시 (CUDA 11.6)
 
 ```bash
 pip install torch==1.12.0+cu116 \
   -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
-※ 환경에 맞는 버전으로 조정할 것.
+※ 반드시 서버 CUDA 환경에 맞춰 조정할 것.
 
 ---
 
-## 4. model_server requirements 설치
+# 3️⃣ Requirements 설치
 
 ```bash
 pip install -r requirements.txt
 ```
 
-추후 모델 확장 시 (선택):
+추가 옵션:
 
-- FastText 사용 시: `fasttext-wheel` 추가 설치
-- LLM 외부 API 호출 시: `requests` 추가 설치
+- FastText 사용 시 → `fasttext-wheel`
+- 외부 LLM API 호출 시 → `requests`
 
 ---
 
-## 5. 환경변수 설정 (.env 권장)
+# 4️⃣ Environment Variables (.env 권장)
 
-운영에서는 `export` 대신 `.env` 사용을 권장한다.
-
-### 파일 위치
+📂 위치:
 ```
 model_server/.env
 ```
 
-### 예시 (.env)
+### 예시
 
 ```
-# KoBART checkpoint 경로 (필수)
 KOBART_CHECKPOINT=/home/ubuntu/model_server/assets/kobart/checkpoint-17000
-
-# (선택) KoBART 모델명
 MODEL_NAME=kobart
-
-# (선택) 공통 device 힌트
 DEVICE=auto
-
-# (선택) KoBART generate 파라미터
-# (요청 payload로 override 가능)
 MAX_NEW_TOKENS=64
 NUM_BEAMS=4
 ```
 
-[중요]
+### 🔒 Important
 
-- `.env`는 git에 올리지 말 것 (`.gitignore` 포함)
-- `assets/` (모델 파일)도 git에 올리지 말 것
+- `.env`는 Git에 올리지 말 것
+- `assets/` (모델 weight)도 Git에 올리지 말 것
 
 ---
 
-## 6. 모델 로딩 단독 테스트 (KoBART)
-
-(주의) `KOBART_CHECKPOINT`가 올바른 경로여야 한다.
+# 5️⃣ KoBART 단독 로딩 테스트
 
 ```bash
 python - << 'EOF'
-import os
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -124,41 +113,41 @@ EOF
 
 ---
 
-## 7. 모델 서버 실행 (운영 모드)
+# 6️⃣ Server 실행 (Production)
 
-단일 GPU 환경에서는 `workers=1` 권장.
+> 단일 GPU 환경에서는 workers=1 권장
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8001 --workers 1
 ```
 
-※ 개발용 `--reload`는 운영 환경에서 비권장.
+개발용:
+```
+--reload (운영 비권장)
+```
 
 ---
 
-## 8. API Contract (Service ↔ Model Server)
-
-Service 서버는 `model_server`의 `/infer/{task}`를 호출해
-task에 맞는 추론을 수행한다.
+# 7️⃣ API Contract (Service ↔ Model Server)
 
 ### Endpoint
 
-- Method: POST  
-- Path: `/infer/{task}`  
-- Content-Type: `application/json`
+| Method | Path | Content-Type |
+|--------|------|--------------|
+| POST   | /infer/{task} | application/json |
 
-### task 예시
+### Task 예시
 
-- kobart
-- lstm
-- fasttext
-- llm
+```
+kobart
+lstm
+fasttext
+llm
+```
 
 ---
 
-### Request (JSON)
-
-최소:
+## 📥 Request (Minimum)
 
 ```json
 {
@@ -166,7 +155,7 @@ task에 맞는 추론을 수행한다.
 }
 ```
 
-옵션 파라미터는 `payload`에 전달:
+## 📥 Request (With Options)
 
 ```json
 {
@@ -182,9 +171,7 @@ task에 맞는 추론을 수행한다.
 
 ---
 
-### Response (200 OK)
-
-공통 래퍼 응답:
+## 📤 Response (200 OK)
 
 ```json
 {
@@ -193,7 +180,7 @@ task에 맞는 추론을 수행한다.
   "result": {
     "request_id": "...",
     "input": "안녕하세요",
-    "gloss": "....",
+    "gloss": "...",
     "meta": {
       "model": "kobart",
       "latency_ms": 123,
@@ -203,27 +190,22 @@ task에 맞는 추론을 수행한다.
 }
 ```
 
-- `result/meta`는 task마다 형태가 달라질 수 있다.
-- service는 `meta`가 없어도 정상 동작하도록 구현 권장.
+> result/meta는 task마다 달라질 수 있다.  
+> service는 meta가 없어도 동작하도록 구현 권장.
 
 ---
 
-## 9. Service-side Error Mapping (권장)
+# 8️⃣ Service Error Mapping (권장)
 
-- timeout / connection error / model_server 5xx  
-  → service는 `502 Bad Gateway`
-
-- model_server 4xx (입력 문제, unknown task 등)  
-  → service는 `400 Bad Request` (또는 정책에 따라 그대로 전달)
-
-- response parsing 실패 (schema mismatch)  
-  → service는 `502 Bad Gateway`
+| 상황 | Service 응답 |
+|------|--------------|
+| timeout / connection error / 5xx | 502 Bad Gateway |
+| model_server 4xx | 400 Bad Request |
+| schema mismatch | 502 Bad Gateway |
 
 ---
 
-## 10. Service Integration ENV (권장)
-
-service는 model_server 주소를 환경변수로 주입한다.
+# 9️⃣ Service Integration ENV
 
 ```
 MODEL_SERVER_BASE_URL=http://127.0.0.1:8001
@@ -232,7 +214,7 @@ MODEL_SERVER_TIMEOUT_SEC=10
 
 ---
 
-## (팀 README 하단부에 추가 예시)
+# 🔹 README 하단 추가 예시
 
 ```markdown
 ## Model Server (Multi-Model)
@@ -244,5 +226,13 @@ This project includes a multi-model FastAPI model server for inference.
 
 ---
 
-본 가이드는 멀티 모델 환경에서  
-운영 안정성, 확장성, 서비스-모델 분리 아키텍처를 전제로 작성되었다.
+## 📌 Architecture Note
+
+본 구조는:
+
+- Single Entry (`/infer/{task}`)
+- Registry 기반 모델 분기
+- 모델 1회 로드 후 재사용
+- Service ↔ Model 완전 분리
+
+를 전제로 설계되었다.
