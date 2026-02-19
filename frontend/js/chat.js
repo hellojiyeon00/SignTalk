@@ -29,6 +29,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // 친구 목록 로드
     fetchMyFriends();
 
+    // 브라우저 알림 권한 요청
+    requestNotificationPermission();
+
     // 엔터키 전송
     const chatInput = document.getElementById("messageInput");
     if (chatInput) {
@@ -548,3 +551,127 @@ async function unblockFriend(friendId) {
     }
 }
 
+// ---------------------------------------------------------
+// [신규] 1. 서버에서 재난 문자 알림을 받을 때
+// ---------------------------------------------------------
+socket.on("disaster_alert", (data) => {
+    // 1) 우측 하단에 팝업(Toast) 띄우기
+    showToast(data.message);
+    
+    // 2) 재난문자 전용 모달창에도 내용 추가하기
+    addDisasterMessageToRoom(data.message, data.time);
+    
+    // 3) 브라우저 알림 표시 (다른 탭을 보고 있어도 알림이 뜸)
+    showBrowserNotification("🚨 재난 문자 알림", data.message);
+});
+
+// ---------------------------------------------------------
+// [신규] 2. 브라우저 알림 권한 요청
+// ---------------------------------------------------------
+function requestNotificationPermission() {
+    if ("Notification" in window) {
+        console.log(`📢 현재 알림 권한 상태: ${Notification.permission}`);
+        
+        if (Notification.permission === "default") {
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    console.log("✅ 브라우저 알림 권한 허용됨");
+                } else {
+                    console.log("❌ 브라우저 알림 권한 거부됨");
+                }
+            });
+        } else if (Notification.permission === "granted") {
+            console.log("✅ 알림 권한이 이미 허용되어 있습니다.");
+        } else if (Notification.permission === "denied") {
+            console.log("❌ 알림 권한이 차단되어 있습니다. 브라우저 설정에서 변경하세요.");
+        }
+    } else {
+        console.log("⚠️ 이 브라우저는 알림을 지원하지 않습니다.");
+    }
+}
+
+// ---------------------------------------------------------
+// [신규] 3. 브라우저 알림 표시 (OS 차원 알림)
+// ---------------------------------------------------------
+function showBrowserNotification(title, message) {
+    // 권한이 허용된 경우에만 알림 표시
+    if ("Notification" in window && Notification.permission === "granted") {
+        const notification = new Notification(title, {
+            body: message,
+            tag: "disaster-alert", // 같은 태그는 중복 알림 방지
+            requireInteraction: false, // 자동으로 사라지게 (true면 사용자가 클릭해야 사라짐)
+        });
+        
+        // 알림 클릭 시 재난문자 전용방 열기
+        notification.onclick = () => {
+            window.focus(); // 브라우저 창을 앞으로 가져옴
+            openDisasterRoom();
+            notification.close();
+        };
+        
+        // 5초 후 자동으로 알림 닫기
+        setTimeout(() => notification.close(), 5000);
+    }
+}
+
+// ---------------------------------------------------------
+// [신규] 4. 우측 하단 팝업(Toast) 그리기 함수
+// ---------------------------------------------------------
+function showToast(message) {
+    const container = document.getElementById("toastContainer");
+    
+    // 알림창(div) 생성
+    const toast = document.createElement("div");
+    toast.className = "toast-message";
+    
+    // 글자가 너무 길면 자르기 (요약해서 보여주기)
+    const shortMessage = message.length > 30 ? message.substring(0, 30) + "..." : message;
+    toast.innerHTML = `<strong>🚨 재난 알림</strong><br><span style="font-size: 13px;">${shortMessage}</span>`;
+    
+    // 팝업을 클릭하면 재난문자 전용방이 열리도록 설정
+    toast.onclick = () => {
+        openDisasterRoom();
+        toast.remove(); // 클릭하면 팝업은 바로 닫힘
+    };
+
+    container.appendChild(toast);
+
+    // 5초(5000ms) 뒤에 자동으로 알림창이 사라지게 함
+    setTimeout(() => {
+        if (toast.parentElement) toast.remove();
+    }, 5000);
+}
+
+// ---------------------------------------------------------
+// [신규] 5. 재난문자 전용방 열기/닫기/메시지 추가
+// ---------------------------------------------------------
+function openDisasterRoom() {
+    document.getElementById("disasterModal").style.display = "flex";
+}
+
+function closeDisasterRoom() {
+    document.getElementById("disasterModal").style.display = "none";
+}
+
+function addDisasterMessageToRoom(msg, time) {
+    const msgBox = document.getElementById("disasterMessages");
+    
+    // 첫 메시지면 안내 문구 지우기
+    if (msgBox.innerHTML.includes("이곳에 실시간 재난")) {
+        msgBox.innerHTML = ""; 
+    }
+
+    // 재난문자 말풍선 디자인
+    const alertDiv = document.createElement("div");
+    alertDiv.style.cssText = "background-color: #fff; border: 1px solid #ffcdd2; border-left: 4px solid #d32f2f; padding: 10px; margin-bottom: 10px; border-radius: 4px;";
+    
+    alertDiv.innerHTML = `
+        <div style="font-size: 11px; color: #888; margin-bottom: 5px;">${time}</div>
+        <div style="font-size: 14px; color: #333; line-height: 1.4;">${msg}</div>
+    `;
+    
+    msgBox.appendChild(alertDiv);
+    
+    // 새 문자가 오면 스크롤 맨 아래로 내리기
+    msgBox.scrollTop = msgBox.scrollHeight;
+}
