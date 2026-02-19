@@ -15,16 +15,16 @@ from typing import Callable, Dict, Optional
 
 # models/ 아래에 있는 각 모델 모듈 (infer(req) 제공)
 # from models import fasttext, kobart, llm, lstm
-from models import kobart
+from models import kobart, fasttext
 
 Handler = Callable[[dict], dict]
 
 # task -> handler 매핑 테이블
 _HANDLERS: Dict[str, Handler] = {
     "kobart": kobart.infer,
-    # "lstm": lstm.infer,
-    # "fasttext": fasttext.infer,
-    # "llm": llm.infer,
+    "fasttext": fasttext.infer
+    # "lstm": lstm.infer
+    # "llm": llm.infer
 }
 
 

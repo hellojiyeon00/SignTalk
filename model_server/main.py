@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from registry import get_handler
@@ -43,7 +43,11 @@ def health() -> dict:
 
 
 @app.post("/infer/{task}")
-def infer(task: str, req: InferRequest):
+def infer(task: str, req: InferRequest, request: Request):
+    # 호출자 식별 (backend/curl 등)
+    caller = request.headers.get("x-caller", "unknown")
+    print(f"[INFER] task={task} x-caller={caller}")
+    
     handler = get_handler(task)
     if handler is None:
         raise HTTPException(status_code=404, detail=f"unknown task: {task}")
