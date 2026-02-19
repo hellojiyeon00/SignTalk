@@ -294,9 +294,7 @@ function sendMessage() {
 function displayMessage(senderId, senderName, msg, time, gloss = "", urls = [], miss = []) {
     /* 말풍선 렌더링 */
     const msgBox = document.getElementById("messages");
-
-    // 타입 안전 비교 (localStorage는 문자열, senderId는 숫자일 수 있음)
-    const isMine = (String(senderId) === String(myId));
+    const isMine = (senderId === myId);
 
     const rowDiv = document.createElement("div");
     rowDiv.className = `message-row ${isMine ? "message-mine" : "message-other"}`;
@@ -349,7 +347,7 @@ function displayMessage(senderId, senderName, msg, time, gloss = "", urls = [], 
         video.width = 200;
         video.className = "message-video";
         video.style.marginTop = "6px";
-        video.autoplay = true;
+        video.autoplay = false;
         video.muted = true;
         video.playsInline = true;
         video.preload = "metadata";
@@ -362,7 +360,15 @@ function displayMessage(senderId, senderName, msg, time, gloss = "", urls = [], 
         let currentIndex = Number.isInteger(cache[messageKey]) ? cache[messageKey] : 0;
         if (currentIndex < 0 || currentIndex >= urls.length) currentIndex = 0;
 
+        // 사용자가 재생 버튼 눌렀는지 추적
+        let userStarted = false;
+
         video.src = urls[currentIndex];
+
+        // 재생 버튼 클릭 감지
+        video.addEventListener("play", () => {
+            userStarted = true;
+        });
 
         const safePlay = () => {
             const p = video.play();
@@ -371,26 +377,36 @@ function displayMessage(senderId, senderName, msg, time, gloss = "", urls = [], 
             }
         };
 
-        video.onloadeddata = () => safePlay();
+        video.onloadeddata = null;
 
         video.onended = () => {
             currentIndex += 1;
+
             if (currentIndex < urls.length) {
                 cache[messageKey] = currentIndex;
                 video.src = urls[currentIndex];
                 video.load();
-                safePlay();
+                video.play().catch(() => {});
                 return;
             }
-            cache[messageKey] = urls.length - 1;
-        };
 
-        video.ondblclick = () => {
+            // 마지막까지 끝났으면 0으로 리셋 (자동 재생하지 않음)
             currentIndex = 0;
             cache[messageKey] = 0;
             video.src = urls[0];
             video.load();
-            safePlay();
+
+            console.log("[VIDEO] finished all clips. reset to 0 and wait.");
+        };
+
+        video.onplay = () => {
+            // 캐시가 비정상 상태면 0부터 시작 보장
+            if (currentIndex >= urls.length) {
+                currentIndex = 0;
+                cache[messageKey] = 0;
+                video.src = urls[0];
+                video.load();
+            }
         };
 
         urlWrap.appendChild(video);
