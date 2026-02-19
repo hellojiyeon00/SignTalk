@@ -40,3 +40,33 @@ def get_my_rooms(user_id: str, db: Session = Depends(get_db)):
 def get_chat_history(room_id: int, db: Session = Depends(get_db)):
     """채팅방 대화 내역 조회"""
     return ChatService.get_chat_history(db, room_id)
+
+
+@router.post("/friend/block")
+def block_friend(
+    my_id: str,
+    friend_id: str,
+    db: Session = Depends(get_db)
+):
+    """친구 차단 (소프트 삭제)"""
+    return ChatService.delete_friend(db, my_id, friend_id)
+
+
+@router.post("/friend/unblock")
+def unblock_friend(
+    my_id: str,
+    friend_id: str,
+    db: Session = Depends(get_db)
+):
+    """친구 차단 해제"""
+    return ChatService.unblock_friend(db, my_id, friend_id)
+
+
+@router.get("/friends")
+def get_friend_list(
+    user_id: str,
+    db: Session = Depends(get_db)
+):
+    """친구 목록 조회"""
+    return ChatService.get_friend_list(db, user_id)
+    return ChatService.get_friend_list_with_status(db, user_id)

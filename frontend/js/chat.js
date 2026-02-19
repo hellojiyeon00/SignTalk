@@ -316,6 +316,7 @@ function openSettings() {
     const modal = document.getElementById("settingsModal");
     document.getElementById("settingsMenu").style.display = "block";
     document.getElementById("settingsEditProfile").style.display = "none";
+    document.getElementById("settingsFriendManage").style.display = "none";
     modal.style.display = "flex";
 }
 
@@ -323,6 +324,7 @@ function showSettingsMenu() {
     /* 설정 메뉴로 돌아가기 */
     document.getElementById("settingsMenu").style.display = "block";
     document.getElementById("settingsEditProfile").style.display = "none";
+    document.getElementById("settingsFriendManage").style.display = "none";
 }
 
 async function goToProfileEdit() {
@@ -408,3 +410,141 @@ async function deleteMember() {
         alert("서버 오류가 발생했습니다.");
     }
 }
+
+// ======== 친구 목록 관리 ========
+async function goToFriendManage() {
+    /* 친구 목록 관리 화면으로 이동 */
+    document.getElementById("settingsMenu").style.display = "none";
+    document.getElementById("settingsFriendManage").style.display = "block";
+    
+    // 친구 목록 로드
+    await loadFriendList();
+}
+
+async function loadFriendList() {
+    /* 친구 목록 로드 */
+    try {
+        const res = await fetch(`${BASE_URL}/chat/friends?user_id=${myId}`);
+        if (!res.ok) throw new Error("친구 목록 로딩 실패");
+        
+        const friends = await res.json();
+        const listContainer = document.getElementById("friendManageList");
+        listContainer.innerHTML = "";
+
+        if (friends.length === 0) {
+            listContainer.innerHTML = `
+                <div style='padding:20px; text-align:center; color:#999;'>
+                    등록된 친구가 없습니다.
+                </div>`;
+            return;
+        }
+
+        friends.forEach(friend => {
+            const itemDiv = document.createElement("div");
+            itemDiv.style.cssText = `
+                padding: 12px; 
+                border: 1px solid #e0e0e0; 
+                border-radius: 8px; 
+                margin-bottom: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            `;
+
+            // 친구 정보
+            const infoDiv = document.createElement("div");
+            const statusText = friend.is_blocked ? ' <span style="font-size:11px; color:#ff9800;">(차단됨)</span>' : '';
+            infoDiv.innerHTML = `
+                <div style="font-weight:bold; margin-bottom:5px;">${friend.user_name}${statusText}</div>
+                <div style="font-size:12px; color:#666;">${friend.user_id}</div>
+            `;
+
+            // 차단/차단 해제 버튼
+            const actionBtn = document.createElement("button");
+            
+            if (friend.is_blocked) {
+                // 차단된 친구 → 차단 해제 버튼
+                actionBtn.textContent = "차단 해제";
+                actionBtn.style.cssText = `
+                    padding: 6px 15px; 
+                    background: #4caf50; 
+                    color: white; 
+                    border: none; 
+                    border-radius: 4px; 
+                    cursor: pointer;
+                    font-size: 13px;
+                `;
+                actionBtn.onclick = () => unblockFriend(friend.user_id);
+            } else {
+                // 활성 친구 → 차단 버튼
+                actionBtn.textContent = "차단";
+                actionBtn.style.cssText = `
+                    padding: 6px 15px; 
+                    background: #ff9800; 
+                    color: white; 
+                    border: none; 
+                    border-radius: 4px; 
+                    cursor: pointer;
+                    font-size: 13px;
+                `;
+                actionBtn.onclick = () => blockFriend(friend.user_id);
+            }
+
+            itemDiv.appendChild(infoDiv);
+            itemDiv.appendChild(actionBtn);
+            listContainer.appendChild(itemDiv);
+        });
+    } catch (e) {
+        console.error(e);
+        alert("친구 목록을 불러올 수 없습니다.");
+    }
+}
+
+async function blockFriend(friendId) {
+    /* 친구 차단 */
+    if (!confirm(`'${friendId}'님을 차단하시겠습니까?\n차단된 친구는 목록에서 숨겨지며, 차단 해제 시 다시 표시됩니다.`)) return;
+
+    try {
+        const res = await fetch(`${BASE_URL}/chat/friend/block?my_id=${myId}&friend_id=${friendId}`, {
+            method: "POST"
+        });
+        
+        const result = await res.json();
+        
+        if (res.ok) {
+            alert(result.message);
+            await loadFriendList(); // 목록 새로고침
+            fetchMyFriends(); // 사이드바 친구 목록도 새로고침
+        } else {
+            alert("차단 실패: " + result.detail);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("서버 오류가 발생했습니다.");
+    }
+}
+
+async function unblockFriend(friendId) {
+    /* 친구 차단 해제 */
+    if (!confirm(`'${friendId}'님의 차단을 해제하시겠습니까?`)) return;
+
+    try {
+        const res = await fetch(`${BASE_URL}/chat/friend/unblock?my_id=${myId}&friend_id=${friendId}`, {
+            method: "POST"
+        });
+        
+        const result = await res.json();
+        
+        if (res.ok) {
+            alert(result.message);
+            await loadFriendList(); // 목록 새로고침
+            fetchMyFriends(); // 사이드바 친구 목록도 새로고침
+        } else {
+            alert("차단 해제 실패: " + result.detail);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("서버 오류가 발생했습니다.");
+    }
+}
+
