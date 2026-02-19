@@ -4,17 +4,13 @@
 """
 import socketio
 import logging
-import asyncio
-import psycopg2
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 from fastapi.concurrency import run_in_threadpool
 
 
 from app.core.database import SessionLocal
-from app.core.config import settings
 from app.services.sign_service import transfer_sign2gloss
-from app.services.disaster_service import DisasterService
 
 # 로거 설정
 logger = logging.getLogger("socket")
@@ -171,48 +167,3 @@ async def handle_send_landmarks(sid, data):
                 
         except Exception as e:
             logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
-            
-# 재난 문자 수신 리스너
-async def listen_for_disaster_alerts():
-    """
-    [백그라운드 작업] PostgreSQL의 'characters_INSERT' 채널을 계속 감시하다가,
-    새 데이터가 들어오면 접속된 모든 유저에게 소켓 알림을 보냅니다.
-    """
-    try:
-        # 1. DB 연결 (비동기 루프를 막지 않기 위해 자동 커밋 모드 사용)
-        conn = psycopg2.connect(settings.DATABASE_URL)
-        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        curs = conn.cursor()
-        
-        # 2. 트리거가 방송하는 채널 주파수 맞추기
-        curs.execute('LISTEN "characters_INSERT";')
-        logger.info("📡 재난 문자 알림(Trigger) 수신 대기 시작...")
-
-        while True:
-            # 3. 다른 비동기 작업들이 멈추지 않도록 1초씩 양보(sleep)하며 확인
-            await asyncio.sleep(1)
-            conn.poll()
-            
-            while conn.notifies:
-                notify = conn.notifies.pop(0)
-                character_id = int(notify.payload)
-                
-                # 4. 서비스 계층을 호출하여 메시지 내용 가져오기
-                alert_data = DisasterService.get_disaster_message(character_id)
-                
-                if alert_data:
-                    # 한국 시간 설정
-                    KST = timezone(timedelta(hours=9))
-                    now_kst = datetime.now(KST).strftime("%H:%M")
-                    
-                    # 5. 소켓으로 모든 클라이언트에게 발송
-                    payload = {
-                        "id": alert_data["id"],
-                        "message": alert_data["message"],
-                        "time": now_kst
-                    }
-                    await sio.emit("disaster_alert", payload)
-                    logger.info(f"🚨 [재난문자 발송] {alert_data['message'][:20]}...")
-
-    except Exception as e:
-        logger.error(f"❌ 재난 문자 수신 리스너 에러: {e}")
