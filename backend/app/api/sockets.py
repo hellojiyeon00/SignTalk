@@ -185,7 +185,7 @@ async def listen_for_disaster_alerts():
         curs = conn.cursor()
         
         # 2. 트리거가 방송하는 채널 주파수 맞추기
-        curs.execute("LISTEN characters_insert;")
+        curs.execute('LISTEN "characters_INSERT";')
         logger.info("📡 재난 문자 알림(Trigger) 수신 대기 시작...")
 
         while True:

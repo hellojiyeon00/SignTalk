@@ -15,7 +15,7 @@ class DisasterService:
         db = SessionLocal()
         try:
             sql = text("""
-                SELECT character_id, message 
+                SELECT character_id, character_content
                 FROM multicampus_schema.characters 
                 WHERE character_id = :id
             """)
