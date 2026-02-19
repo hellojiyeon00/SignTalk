@@ -18,7 +18,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-MODEL_SERVER_BASE_URL = os.getenv("MODEL_SERVER_URL", "http://127.0.0.1:8001")
+MODEL_SERVER_BASE_URL = os.getenv("MODEL_SERVER_URL", "http://127.0.0.1:8000")
 MODEL_SERVER_TIMEOUT_SEC = float(os.getenv("MODEL_SERVER_TIMEOUT_SEC", "10"))
 
 
@@ -75,7 +75,7 @@ class ModelClient:
         url = f"{self.base_url}/infer/{task.strip()}"
 
         async with httpx.AsyncClient(timeout=self.timeout_sec) as client:
-            response = await client.post(url, json={"text": text})
+            response = await client.post(url, json={"text": text}, headers={"X-Caller": "backend"})
 
         response.raise_for_status()
         return response.json()
@@ -101,13 +101,42 @@ class ModelClient:
         )
 
         with httpx.Client(timeout=self.timeout_sec) as client:
-            response = client.post(url, json={"text": text})
+            response = client.post(url, json={"text": text}, headers={"X-Caller": "backend"})
 
         elapsed_ms = int((time.time() - t0) * 1000)
         logger.info(f"[ModelClient] RESP {response.status_code} elapsed_ms={elapsed_ms}")
 
         response.raise_for_status()
         return response.json()
+    
+    def infer_payload_sync(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        payload 기반 infer (동기)
+        - endpoint: POST /infer/{task}
+        - request: {"payload": {...}}
+        """
+        if not isinstance(task, str) or not task.strip():
+            raise ValueError("task must be a non-empty string")
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be a dict")
+
+        url = f"{self.base_url}/infer/{task.strip()}"
+        t0 = time.time()
+
+        logger.info(f"[ModelClient] POST {url} timeout={self.timeout_sec}s (payload)")
+        with httpx.Client(timeout=self.timeout_sec) as client:
+            response = client.post(
+                url,
+                json={"payload": payload},
+                headers={"X-Caller": "backend"},
+            )
+
+        elapsed_ms = int((time.time() - t0) * 1000)
+        logger.info(f"[ModelClient] RESP {response.status_code} elapsed_ms={elapsed_ms}")
+
+        response.raise_for_status()
+        return response.json()
+
 
     async def translate(self, text: str) -> Dict[str, Any]:
         """
