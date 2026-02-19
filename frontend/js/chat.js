@@ -3,9 +3,11 @@
  * Socket.IO 기반 실시간 1:1 채팅
  */
 
-const BASE_URL = "http://localhost:8001";
+const BASE_URL = "http://localhost:8000";
 const myId = localStorage.getItem("userId");
 const myName = localStorage.getItem("userName");
+// 추가
+const isDeaf = (localStorage.getItem("is_deaf") === "true");
 
 let currentRoomId = null;    // DB 방 번호
 let currentRoomName = null;  // 소켓 방 이름 (user1_user2)
@@ -52,24 +54,38 @@ document.addEventListener("DOMContentLoaded", () => {
 socket.on("receive_message", (data) => {
     console.log("📥 [Socket] 메시지 수신:", data);
 
-    if (data.sender && data.message) {
-        const timeStr = data.time || new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        });
+    // 글로스 확인용 코드 (소영)
+    console.log("payload=", data);
 
-        // 수어 영상을 위해 추가 (소영)
-        displayMessage(
-            data.sender,
-            data.sender_name,
-            data.message,
-            timeStr,
-            data.gloss || "",
-            data.urls || [],
-            data.miss || []
-        );
-    }
+    // 추가
+    console.log("[RECV] keys=", Object.keys(data));
+    console.log("[RECV] urls_len=", (data.urls ? data.urls.length : 0));
+    console.log("[RECV] has_urls_keys=", Object.prototype.hasOwnProperty.call(data, "urls"));
+    console.log("[RECV] sender=", data.sender, "myId", myId, "isMine=", data.sender === myId);
+
+    if (!data.sender) return;
+
+    const timeStr = data.time || new Date().toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: false 
+    });
+
+    const senderName = data.sender_name || "";
+    const message = (typeof data.message === "string") ? data.message : "";
+    const urls = Array.isArray(data.urls) ? data.urls : [];
+    const miss = Array.isArray(data.miss) ?  data.miss : [];
+    const gloss = (typeof data.gloss === "string") ? data.gloss : "";
+
+    displayMessage(
+        data.sender,
+        senderName,
+        message,
+        timeStr,
+        urls,
+        miss,
+        gloss
+    );
 });
 
 // ======== API 함수 ========
@@ -78,7 +94,7 @@ async function fetchMyFriends() {
     try {
         const response = await fetch(`${BASE_URL}/chat/list?user_id=${myId}`);
         const friends = await response.json();
-
+        
         const listContainer = document.getElementById("friendList");
         listContainer.innerHTML = "";
 
@@ -95,7 +111,7 @@ async function fetchMyFriends() {
             itemDiv.className = "friend-item";
             itemDiv.innerHTML = `
                 <div style="font-weight:500;">
-                    ${user.user_name}
+                    ${user.user_name} 
                     <span style="font-size:12px; color:#888;">(${user.user_id})</span>
                 </div>`;
             itemDiv.onclick = () => startChat(user, itemDiv);
@@ -150,7 +166,7 @@ async function searchUser() {
             const addBtn = document.createElement("button");
             addBtn.textContent = "추가";
             addBtn.style.cssText = `
-                font-size:12px; padding:4px 8px; cursor:pointer;
+                font-size:12px; padding:4px 8px; cursor:pointer; 
                 background:#007bff; color:white; border:none; border-radius:4px;`;
             addBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -175,7 +191,7 @@ function closeSearch() {
 
 async function addFriend(targetId) {
     /* 친구 추가 */
-    if (!confirm(`'${targetId}'님을 친구로 추가하시겠습니까?`)) return;
+    if(!confirm(`'${targetId}'님을 친구로 추가하시겠습니까?`)) return;
 
     try {
         const response = await fetch(`${BASE_URL}/chat/room`, {
@@ -196,6 +212,8 @@ async function addFriend(targetId) {
 
 // ======== 채팅 핵심 로직 ========
 async function startChat(friend, clickedElement) {
+    // 잠시 추가
+    console.log("[startChat] called", { friend, clickedElement, BASE_URL});
     /* 채팅방 입장 */
     // UI 활성화
     const allItems = document.querySelectorAll('.friend-item');
@@ -239,23 +257,29 @@ async function startChat(friend, clickedElement) {
             try {
                 const dateObj = new Date(chat.date);
                 if (!isNaN(dateObj)) {
-                    timeStr = dateObj.toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false
+                    timeStr = dateObj.toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit', 
+                        hour12: false 
                     });
                 }
-            } catch (e) { }
+            } catch(e) {}
+            console.log("history chat payload=", chat);
 
-            // 수어 영상 표시 위해서 코드 추가 (소영)
+            console.log("[HISTORY] has_urls=", Array.isArray(chat.urls), "urls_len=", chat.urls?.length, "keys=", Object.keys(chat))
+            // 수어 영상 채팅방에 유지하기 위해 수정 및 추가 (소영)
+            const urls = Array.isArray(chat.urls) ? chat.urls : [];
+            const miss = Array.isArray(chat.miss) ? chat.miss : [];
+            const gloss = (typeof chat.gloss === "string") ? chat.gloss : "";
+
             displayMessage(
                 chat.sender,
                 chat.sender_name,
-                chat.message,
+                (typeof chat.message === "string") ? chat.message : "",
                 timeStr,
-                chat.gloss || "",
-                chat.urls || [],
-                chat.miss || []
+                urls,
+                miss,
+                gloss
             );
         });
 
@@ -291,119 +315,125 @@ function sendMessage() {
     input.focus();
 }
 
-function displayMessage(senderId, senderName, msg, time, gloss = "", urls = [], miss = []) {
+function displayMessage(senderId, senderName, msg, time, urls = [], miss = [], gloss = "") {
     /* 말풍선 렌더링 */
     const msgBox = document.getElementById("messages");
-
-    // 타입 안전 비교 (localStorage는 문자열, senderId는 숫자일 수 있음)
-    const isMine = (String(senderId) === String(myId));
+    const isMine = (senderId === myId);
 
     const rowDiv = document.createElement("div");
     rowDiv.className = `message-row ${isMine ? "message-mine" : "message-other"}`;
 
     const nameDiv = document.createElement("div");
     nameDiv.className = "message-name";
-    nameDiv.textContent = senderName;
+    nameDiv.textContent = senderName || "";
 
     const contentDiv = document.createElement("div");
     contentDiv.className = "message-content";
 
+    // 텍스트는 농인/비농인 모두 항상 표시
     const bubbleDiv = document.createElement("div");
     bubbleDiv.className = "message-bubble";
-    bubbleDiv.textContent = msg;
+    bubbleDiv.textContent = (typeof msg === "string") ? msg : "";
+    contentDiv.appendChild(bubbleDiv);
+
+    // role 기반: 농인일 때만 추가 영역(urls/gloss/miss) 표시
+    const shouldShowExtra = isDeaf;
+
+    if (shouldShowExtra) {
+        const extraDiv = document.createElement("div");
+        extraDiv.className = "message-extra";
+        contentDiv.appendChild(extraDiv);
+
+        // gloss 있으면 표시
+        if (typeof gloss === "string" && gloss.trim().length > 0) {
+            const glossDiv = document.createElement("div");
+            glossDiv.className = "message-gloss";
+            glossDiv.textContent = `gloss: ${gloss}`;
+            extraDiv.appendChild(glossDiv);
+        }
+
+        // urls 비디오 표시
+        if (Array.isArray(urls) && urls.length > 0) {
+            const urlWrap = document.createElement("div");
+            urlWrap.className = "message-urls";
+
+            const video = document.createElement("video");
+            video.controls = true;
+            video.width = 200;
+            video.className = "message-video";
+            video.style.marginTop = "6px";
+            video.autoplay = true;
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+
+            // 메시지별 key (최대한 안정적으로)
+            const messageKey = `${senderId}|${time}|${(msg || "").slice(0, 32)}`;
+
+            // 전역 캐시 (파일 상단에 두는 게 가장 좋지만, 없으면 window에 붙여도 됨)
+            window.__videoIndexCache = window.__videoIndexCache || {};
+            const cache = window.__videoIndexCache;
+
+            let currentIndex = Number.isInteger(cache[messageKey]) ? cache[messageKey] : 0;
+            if (currentIndex < 0 || currentIndex >= urls.length) currentIndex = 0;
+
+            video.src = urls[currentIndex];
+
+            const safePlay = () => {
+                const p = video.play();
+                if (p && typeof p.catch === "function") {
+                    p.catch((e) => {
+                        // autoplay 정책 등으로 실패할 수 있음 (조용히 무시)
+                        console.log("[VIDEO] play blocked:", e?.name || e);
+                    });
+                }
+            };
+
+            // 로드 완료 시 재생 시도
+            video.onloadeddata = () => safePlay();
+
+            video.onended = () => {
+                currentIndex += 1;
+
+                if (currentIndex < urls.length) {
+                    cache[messageKey] = currentIndex;
+                    video.src = urls[currentIndex];
+                    video.load();
+                    safePlay();
+                    return;
+                }
+
+                // 마지막까지 끝났으면 멈춤(리셋하지 않음)
+                cache[messageKey] = urls.length - 1;
+                console.log("[VIDEO] finished all clips. stop at last.");
+            };
+
+            // (선택) 더블클릭하면 처음부터 다시보기
+            video.ondblclick = () => {
+                currentIndex = 0;
+                cache[messageKey] = 0;
+                video.src = urls[0];
+                video.load();
+                safePlay();
+            };
+
+            urlWrap.appendChild(video);
+            extraDiv.appendChild(urlWrap);
+        }
+
+        // miss 표시
+        if (Array.isArray(miss) && miss.length > 0) {
+            const missDiv = document.createElement("div");
+            missDiv.className = "message-miss";
+            missDiv.textContent = `미매칭: ${miss.join(", ")}`;
+            extraDiv.appendChild(missDiv);
+        }
+    }
 
     const timeSpan = document.createElement("span");
     timeSpan.className = "message-time";
-    timeSpan.textContent = time;
-
-    contentDiv.appendChild(bubbleDiv);
+    timeSpan.textContent = time || "";
     contentDiv.appendChild(timeSpan);
-
-    // gloss/urls/miss가 있을 때만 extra 영역 생성 (DOM 비대화 방지)
-    const hasGloss = (typeof gloss === "string" && gloss.trim().length > 0);
-    const hasUrls = (Array.isArray(urls) && urls.length > 0);
-    const hasMiss = (Array.isArray(miss) && miss.length > 0);
-
-    let extraDiv = null;
-    if (hasGloss || hasUrls || hasMiss) {
-        extraDiv = document.createElement("div");
-        extraDiv.className = "message-extra";
-        contentDiv.appendChild(extraDiv);
-    }
-
-    // gloss
-    if (extraDiv && hasGloss) {
-        const glossDiv = document.createElement("div");
-        glossDiv.className = "message-gloss";
-        glossDiv.textContent = `gloss: ${gloss}`;
-        extraDiv.appendChild(glossDiv);
-    }
-
-    // urls (연속 재생)
-    if (extraDiv && hasUrls) {
-        const urlWrap = document.createElement("div");
-        urlWrap.className = "message-urls";
-
-        const video = document.createElement("video");
-        video.controls = true;
-        video.width = 200;
-        video.className = "message-video";
-        video.style.marginTop = "6px";
-        video.autoplay = true;
-        video.muted = true;
-        video.playsInline = true;
-        video.preload = "metadata";
-
-        const messageKey = `${senderId}|${time}|${(msg || "").slice(0, 32)}`;
-
-        window.__videoIndexCache = window.__videoIndexCache || {};
-        const cache = window.__videoIndexCache;
-
-        let currentIndex = Number.isInteger(cache[messageKey]) ? cache[messageKey] : 0;
-        if (currentIndex < 0 || currentIndex >= urls.length) currentIndex = 0;
-
-        video.src = urls[currentIndex];
-
-        const safePlay = () => {
-            const p = video.play();
-            if (p && typeof p.catch === "function") {
-                p.catch((e) => console.log("[VIDEO] play blocked:", e?.name || e));
-            }
-        };
-
-        video.onloadeddata = () => safePlay();
-
-        video.onended = () => {
-            currentIndex += 1;
-            if (currentIndex < urls.length) {
-                cache[messageKey] = currentIndex;
-                video.src = urls[currentIndex];
-                video.load();
-                safePlay();
-                return;
-            }
-            cache[messageKey] = urls.length - 1;
-        };
-
-        video.ondblclick = () => {
-            currentIndex = 0;
-            cache[messageKey] = 0;
-            video.src = urls[0];
-            video.load();
-            safePlay();
-        };
-
-        urlWrap.appendChild(video);
-        extraDiv.appendChild(urlWrap);
-    }
-
-    // miss
-    if (extraDiv && hasMiss) {
-        const missDiv = document.createElement("div");
-        missDiv.className = "message-miss";
-        missDiv.textContent = `미매칭: ${miss.join(", ")}`;
-        extraDiv.appendChild(missDiv);
-    }
 
     rowDiv.appendChild(nameDiv);
     rowDiv.appendChild(contentDiv);
@@ -438,9 +468,9 @@ async function goToProfileEdit() {
     try {
         const res = await fetch(`${BASE_URL}/auth/me?user_id=${myId}`);
         if (!res.ok) throw new Error("정보 로딩 실패");
-
+        
         const data = await res.json();
-
+        
         document.getElementById("editName").value = data.user_name;
         document.getElementById("editPhone").value = data.phone_number;
         document.getElementById("editPw").value = "";
@@ -476,9 +506,9 @@ async function updateMember() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(updateData)
         });
-
+        
         const result = await res.json();
-
+        
         if (res.ok) {
             alert(result.message);
             if (newName) {
@@ -498,12 +528,12 @@ async function updateMember() {
 async function deleteMember() {
     /* 회원 탈퇴 */
     if (!confirm("정말로 탈퇴하시겠습니까?\n탈퇴 후에는 복구할 수 없습니다.")) return;
-
+    
     try {
         const res = await fetch(`${BASE_URL}/auth/me?user_id=${myId}`, {
             method: "DELETE"
         });
-
+        
         if (res.ok) {
             alert("탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.");
             logout();
