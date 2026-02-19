@@ -361,6 +361,41 @@ body {
     background-color: #e0e0e0;
 }
 
+/* 우측 하단 알림(Toast) 구역 설정 */
+.toast-container {
+    position: fixed;
+    bottom: 20px; /* 아래에서 20px 띄움 */
+    right: 20px;  /* 오른쪽에서 20px 띄움 */
+    z-index: 9999; /* 화면 제일 위에 보이게 함 */
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* 알림이 여러 개 올 때 사이 간격 */
+}
+
+/* 개별 알림창 디자인 */
+.toast-message {
+    background-color: #333; /* 짙은 회색 배경 */
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 그림자 효과 */
+    cursor: pointer; /* 클릭할 수 있다는 표시 */
+    width: 300px;
+    
+    /* 스르륵 나타나는 애니메이션 */
+    animation: slideInRight 0.3s ease-out forwards;
+}
+
+.toast-message:hover {
+    background-color: #444; /* 마우스 올리면 약간 밝아짐 */
+}
+
+/* 오른쪽에서 스르륵 들어오는 애니메이션 정의 */
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
 .modal-content h3 { margin-top: 0; margin-bottom: 20px; text-align: center; }
 .modal-content .input-group { margin-bottom: 15px; }
 .modal-content input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 5px; }
