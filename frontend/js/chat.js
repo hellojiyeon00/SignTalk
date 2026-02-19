@@ -31,6 +31,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 브라우저 알림 권한 요청
     requestNotificationPermission();
+    
+    // SSE로 재난문자 실시간 수신 시작
+    connectDisasterSSE();
 
     // 엔터키 전송
     const chatInput = document.getElementById("messageInput");
@@ -320,6 +323,7 @@ function openSettings() {
     document.getElementById("settingsMenu").style.display = "block";
     document.getElementById("settingsEditProfile").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "none";
+    document.getElementById("settingsLocationSettings").style.display = "none";
     modal.style.display = "flex";
 }
 
@@ -328,6 +332,7 @@ function showSettingsMenu() {
     document.getElementById("settingsMenu").style.display = "block";
     document.getElementById("settingsEditProfile").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "none";
+    document.getElementById("settingsLocationSettings").style.display = "none";
 }
 
 async function goToProfileEdit() {
@@ -352,6 +357,11 @@ async function goToProfileEdit() {
 
 function closeSettings() {
     document.getElementById("settingsModal").style.display = "none";
+    // 모든 서브 메뉴 초기화
+    document.getElementById("settingsMenu").style.display = "block";
+    document.getElementById("settingsEditProfile").style.display = "none";
+    document.getElementById("settingsFriendManage").style.display = "none";
+    document.getElementById("settingsLocationSettings").style.display = "none";
 }
 
 async function updateMember() {
@@ -551,19 +561,229 @@ async function unblockFriend(friendId) {
     }
 }
 
-// ---------------------------------------------------------
-// [신규] 1. 서버에서 재난 문자 알림을 받을 때
-// ---------------------------------------------------------
-socket.on("disaster_alert", (data) => {
-    // 1) 우측 하단에 팝업(Toast) 띄우기
-    showToast(data.message);
+// ======== GPS 위치 설정 ========
+function goToLocationSettings() {
+    /* GPS 위치 설정 화면으로 이동 */
+    document.getElementById("settingsMenu").style.display = "none";
+    document.getElementById("settingsLocationSettings").style.display = "block";
     
-    // 2) 재난문자 전용 모달창에도 내용 추가하기
-    addDisasterMessageToRoom(data.message, data.time);
+    // 저장된 설정 불러오기
+    loadLocationSettings();
+}
+
+function loadLocationSettings() {
+    /* localStorage에서 GPS 설정 불러오기 */
+    const gpsEnabled = localStorage.getItem("gpsEnabled") === "true";
+    const savedLocation = localStorage.getItem("userLocation");
     
-    // 3) 브라우저 알림 표시 (다른 탭을 보고 있어도 알림이 뜸)
-    showBrowserNotification("🚨 재난 문자 알림", data.message);
-});
+    // 토글 상태 복원
+    document.getElementById("gpsToggle").checked = gpsEnabled;
+    
+    // UI 업데이트
+    if (gpsEnabled) {
+        document.getElementById("gpsLocationDisplay").style.display = "block";
+        document.getElementById("manualLocationInput").style.display = "none";
+        // GPS로 현재 위치 가져오기
+        getCurrentLocation();
+    } else {
+        document.getElementById("gpsLocationDisplay").style.display = "none";
+        document.getElementById("manualLocationInput").style.display = "block";
+        
+        // 수동 입력값 복원
+        if (savedLocation) {
+            document.getElementById("manualLocation").value = savedLocation;
+        }
+    }
+    
+    // 저장된 위치 정보 표시
+    if (savedLocation) {
+        document.getElementById("savedLocationInfo").style.display = "block";
+        document.getElementById("savedLocationText").textContent = savedLocation;
+    } else {
+        document.getElementById("savedLocationInfo").style.display = "none";
+    }
+}
+
+function toggleGPS() {
+    /* GPS 토글 스위치 변경 */
+    const isEnabled = document.getElementById("gpsToggle").checked;
+    
+    if (isEnabled) {
+        // GPS 켜기 - 권한 요청
+        if ("geolocation" in navigator) {
+            document.getElementById("gpsLocationDisplay").style.display = "block";
+            document.getElementById("manualLocationInput").style.display = "none";
+            
+            localStorage.setItem("gpsEnabled", "true");
+            getCurrentLocation();
+        } else {
+            alert("이 브라우저는 GPS를 지원하지 않습니다.");
+            document.getElementById("gpsToggle").checked = false;
+        }
+    } else {
+        // GPS 끄기 - 수동 입력으로 전환
+        document.getElementById("gpsLocationDisplay").style.display = "none";
+        document.getElementById("manualLocationInput").style.display = "block";
+        
+        localStorage.setItem("gpsEnabled", "false");
+        
+        // 기존 저장된 위치 불러오기
+        const savedLocation = localStorage.getItem("userLocation");
+        if (savedLocation) {
+            document.getElementById("manualLocation").value = savedLocation;
+        }
+    }
+}
+
+function getCurrentLocation() {
+    /* GPS로 현재 위치 가져오기 */
+    const locationDisplay = document.getElementById("currentLocation");
+    locationDisplay.textContent = "위치를 가져오는 중...";
+    
+    navigator.geolocation.getCurrentPosition(
+        // 성공
+        (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            console.log(`📍 GPS 좌표: ${lat}, ${lng}`);
+            
+            // 좌표를 주소로 변환 (Reverse Geocoding)
+            reverseGeocode(lat, lng);
+        },
+        // 실패
+        (error) => {
+            console.error("GPS 오류:", error.message);
+            
+            let errorMsg = "";
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMsg = "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMsg = "위치 정보를 사용할 수 없습니다.";
+                    break;
+                case error.TIMEOUT:
+                    errorMsg = "위치 정보 요청 시간이 초과되었습니다.";
+                    break;
+                default:
+                    errorMsg = "알 수 없는 오류가 발생했습니다.";
+            }
+            
+            locationDisplay.textContent = errorMsg;
+            locationDisplay.style.color = "#d32f2f";
+        },
+        // 옵션
+        {
+            enableHighAccuracy: true,  // 고정밀 모드 (GPS 사용)
+            timeout: 10000,            // 10초 제한
+            maximumAge: 0              // 캐시 사용 안 함
+        }
+    );
+}
+
+function reverseGeocode(lat, lng) {
+    /* 좌표를 주소로 변환 (Kakao Map Geocoding API 사용) */
+    // 주의: Kakao API 키가 필요합니다. 실제 사용 시 백엔드에서 처리하거나 API 키를 설정해야 합니다.
+    // 여기서는 간단한 형식으로 표시
+    
+    const locationDisplay = document.getElementById("currentLocation");
+    
+    // 실제로는 Kakao Geocoding API를 호출해야 하지만, 
+    // 데모를 위해 좌표만 표시하고 사용자가 확인할 수 있게 함
+    const locationText = `위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`;
+    locationDisplay.textContent = locationText;
+    locationDisplay.style.color = "#333";
+    
+    // localStorage에 저장
+    localStorage.setItem("userLocation", locationText);
+    localStorage.setItem("userLatitude", lat);
+    localStorage.setItem("userLongitude", lng);
+    
+    // 저장된 위치 정보 업데이트
+    document.getElementById("savedLocationInfo").style.display = "block";
+    document.getElementById("savedLocationText").textContent = locationText;
+    
+    console.log("✅ 위치 정보 저장 완료:", locationText);
+}
+
+function refreshLocation() {
+    /* 위치 새로고침 버튼 */
+    getCurrentLocation();
+}
+
+function saveManualLocation() {
+    /* 수동 입력한 위치 저장 */
+    const location = document.getElementById("manualLocation").value.trim();
+    
+    if (!location) {
+        alert("위치를 입력해주세요.");
+        return;
+    }
+    
+    // localStorage에 저장
+    localStorage.setItem("userLocation", location);
+    localStorage.setItem("gpsEnabled", "false");
+    
+    // 저장된 위치 정보 표시
+    document.getElementById("savedLocationInfo").style.display = "block";
+    document.getElementById("savedLocationText").textContent = location;
+    
+    alert("위치가 저장되었습니다.");
+    console.log("✅ 수동 위치 저장:", location);
+}
+
+// ---------------------------------------------------------
+// [신규] 1. SSE로 재난 문자 실시간 수신
+// ---------------------------------------------------------
+let disasterEventSource = null;
+
+function connectDisasterSSE() {
+    /* SSE 연결로 재난문자 수신 */
+    if (disasterEventSource) {
+        disasterEventSource.close();
+    }
+    
+    // SSE 연결 생성
+    disasterEventSource = new EventSource(`${BASE_URL}/disaster/stream?user_id=${myId}`);
+    
+    // 재난문자 수신 이벤트
+    disasterEventSource.addEventListener('disaster', (event) => {
+        const data = JSON.parse(event.data);
+        console.log("🚨 [SSE] 재난문자 수신:", data);
+        
+        // 1) 우측 하단에 팝업(Toast) 띄우기
+        showToast(data.message);
+        
+        // 2) 재난문자 전용 모달창에도 내용 추가하기
+        addDisasterMessageToRoom(data.message, data.time);
+        
+        // 3) 브라우저 알림 표시 (다른 탭을 보고 있어도 알림이 뜸)
+        showBrowserNotification("🚨 재난 문자 알림", data.message);
+    });
+    
+    // 연결 상태 이벤트
+    disasterEventSource.addEventListener('open', () => {
+        console.log("✅ [SSE] 재난문자 스트림 연결됨");
+    });
+    
+    // 연결 유지용 ping 이벤트
+    disasterEventSource.addEventListener('ping', (event) => {
+        // keep-alive 메시지, 로그 출력 안 함
+    });
+    
+    // 오류 처리 (자동 재연결)
+    disasterEventSource.onerror = (error) => {
+        console.error("❌ [SSE] 재난문자 스트림 오류:", error);
+        
+        // EventSource는 자동 재연결을 시도합니다.
+        // readyState가 CLOSED(2)면 수동으로 재연결
+        if (disasterEventSource.readyState === EventSource.CLOSED) {
+            console.log("🔄 [SSE] 5초 후 재연결 시도...");
+            setTimeout(connectDisasterSSE, 5000);
+        }
+    };
+}
 
 // ---------------------------------------------------------
 // [신규] 2. 브라우저 알림 권한 요청
