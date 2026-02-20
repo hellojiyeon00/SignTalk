@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import hashlib
+import time
 from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
@@ -43,6 +44,7 @@ class ChatService:
             return [], []
 
         # 여기서 clean_gloss를 먼저 적용 (매핑률/미스 일관성 확보)
+        logger.info("[GLOSS RAW] %r", gloss[:200])
         gloss_clean = clean_gloss(gloss)
         if not gloss_clean:
             return [], []
@@ -86,11 +88,20 @@ class ChatService:
         socekets.py에서 run_in_threadpool로 호출하기 위한 형태. 
         """
         client = ModelClient()
+        # fastText는 보조 단계이므로 WS 지연 방지를 위해 짧은 timeout 사용
+        fasttext_client = ModelClient(timeout_sec=2.0)
         clean_text = normalize_input_text(text)
 
         # 모델 입력은 normalize_input_text까지만 적용한 텍스트를 그대로 사용
         # (문장 분리/점 제거/하드컷 금지)
-        model_text = clean_text
+        # [v1 호환] 모델 입력 전용: 문장부호를 공백으로 치환 + 공백 정규화
+        model_text = (
+            clean_text
+            .replace(".", " ")
+            .replace("?", " ")
+            .replace("!", " ")
+        )
+        model_text = " ".join(model_text.split())
 
         logger.info(
             "[text_to_gloss_sync] raw_len=%d clean_len=%d model_len=%d raw_hash=%s clean_hash=%s model_hash=%s clean_preview=%r model_preview=%r",
@@ -112,22 +123,56 @@ class ChatService:
         )
 
         # 멀티 model_server 표준 호출로 전환
-        infer_res = client.infer_sync("kobart", model_text)
+        t_kobart = time.time()
+        # [v1 동치화 시도] generation 파라미터를 payload로 고정해서 경로 차이 축소
+        infer_res = client.infer_sync(
+            "kobart",
+            model_text,
+            payload={"top_k": 1, "max_new_tokens": 64, "num_beams": 4}
+        )
+        logger.info("[TIMING] kobart_ms=%d", int((time.time() - t_kobart) * 1000))
 
         # 지금은 infer 표준 응답(ok/task/result) 흐름으로 통일
         result = infer_res.get("result") if isinstance(infer_res, dict) else None
         gloss: Optional[str] = result.get("gloss") if isinstance(result, dict) else None
         meta = result.get("meta") if isinstance(result, dict) and isinstance(result.get("meta"), dict) else None
         
+        # [DEBUG] /infer/kobart 경로 메타 확인 (device/params/model_dir/model_text)
+        logger.info("[KOBART META] %s", meta)
+        logger.info("[KOBART MODEL_TEXT] %r", result.get("model_text") if isinstance(result, dict) else None)
+
+        logger.info("[KOBART GLOSS RAW FULL_PREVIEW] %r", (gloss or "")[:300])
+
         # 모델 응답 gloss 후처리 (토큰 정제)
         if not gloss:
             return {"gloss": None, "urls": [], "miss": [], "meta": meta}
 
+        t_map = time.time()
         gloss_clean = clean_gloss(gloss)
         urls, miss = ChatService.gloss_to_urls(gloss_clean)
+        logger.info("[TIMING] url_map_ms=%d", int((time.time() - t_map) * 1000))
 
-        # 반환 gloss는 "원본"이 아니라 정제된 gloss를 쓰는 게 downstream에 유리
-        # (원본이 필요하면 gloss_raw로 별도 추가하는 방식 추천)
+        # Step A: miss 토큰이 있을 때만 fastText 호출 (실패해도 절대 전체 흐름 실패시키지 않음)
+        if miss:
+            trace_id = _sha256(gloss_clean)[:8]
+            try:
+                t_ft = time.time()
+                fast_res = fasttext_client.infer_payload_sync("fasttext", {"tokens": miss})
+                logger.info("[TIMING] fasttext_ms=%d", int((time.time() - t_ft) * 1000))
+                logger.info(
+                    "[FASTTEXT][%s] miss_cnt=%d resp_preview=%r",
+                    trace_id,
+                    len(miss),
+                    str(fast_res)[:2000],
+                )
+            except Exception as e:
+                # Step A에서는 fastText 실패를 무조건 삼키고 진행 (스택트레이스는 남기지 않음)
+                logger.warning("[FASTTEXT][%s] call failed (Step A): %s", trace_id, e)
+                fast_res = {"ok": False, "task": "fasttext", "error": "timeout", "result": None}
+        else:
+            logger.info("[FASTTEXT] skip (no miss tokens)")
+
+        # Step A에서는 절대 merge 하지 않고 기존 결과 그대로 반환
         return {"gloss": gloss_clean, "urls": urls, "miss": miss, "meta": meta}
 
     @staticmethod

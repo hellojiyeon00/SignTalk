@@ -3,7 +3,7 @@
  * Socket.IO 기반 실시간 1:1 채팅
  */
 
-const BASE_URL = "http://localhost:8001";
+const BASE_URL = "http://localhost:8000";
 const myId = localStorage.getItem("userId");
 const myName = localStorage.getItem("userName");
 

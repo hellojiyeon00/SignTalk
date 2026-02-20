@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from .settings import settings
 
 
 _MODEL_BUNDLE: Optional[Dict[str, Any]] = None
@@ -27,15 +28,24 @@ def get_model_bundle() -> Dict[str, Any]:
     if _MODEL_BUNDLE is not None:
         return _MODEL_BUNDLE
 
-    checkpoint_path = os.environ.get("KOBART_CHECKPOINT")
-    if not checkpoint_path:
-        raise RuntimeError("KOBART_CHECKPOINT env is not set")
+    checkpoint_path = settings.kobart_model_dir
+    if not checkpoint_path or not str(checkpoint_path).strip():
+        raise RuntimeError("KoBART checkpoint path is empty (KOBART_MODEL_DIR/KOBART_CHECKPOINT)")
 
     ckpt_dir = Path(checkpoint_path).expanduser().resolve()
     if not ckpt_dir.exists():
         raise RuntimeError(f"Checkpoint path not found: {ckpt_dir}")
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device 정책: cpu | cuda | auto
+    dev_opt = (settings.device or "auto").strip().lower()
+    if dev_opt == "cpu":
+        device = "cpu"
+    elif dev_opt == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("DEVICE=cuda but CUDA is not available")
+        device = "cuda"
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
     tokenizer = AutoTokenizer.from_pretrained(str(ckpt_dir))
     model = AutoModelForSeq2SeqLM.from_pretrained(str(ckpt_dir)).to(device)
