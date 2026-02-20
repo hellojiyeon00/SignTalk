@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # JWT 설정
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
+    
+    # Kakao API 설정
+    KAKAO_REST_API_KEY: str = "YOUR_KAKAO_REST_API_KEY_HERE"
 
     @property
     def DATABASE_URL(self) -> str:

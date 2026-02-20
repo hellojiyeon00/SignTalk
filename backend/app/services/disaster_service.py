@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 
-logger = logging.getLogger("disaster_service")
+logger = logging.getLogger("     disaster_service")
 
 # 전역 재난문자 큐 (PostgreSQL NOTIFY 리스너가 채움)
 disaster_queue = asyncio.Queue()

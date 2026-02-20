@@ -683,28 +683,74 @@ function getCurrentLocation() {
 }
 
 function reverseGeocode(lat, lng) {
-    /* 좌표를 주소로 변환 (Kakao Map Geocoding API 사용) */
-    // 주의: Kakao API 키가 필요합니다. 실제 사용 시 백엔드에서 처리하거나 API 키를 설정해야 합니다.
-    // 여기서는 간단한 형식으로 표시
-    
+    /* 좌표를 주소로 변환 (백엔드 Kakao REST API 사용) */
     const locationDisplay = document.getElementById("currentLocation");
     
-    // 실제로는 Kakao Geocoding API를 호출해야 하지만, 
-    // 데모를 위해 좌표만 표시하고 사용자가 확인할 수 있게 함
-    const locationText = `위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`;
-    locationDisplay.textContent = locationText;
-    locationDisplay.style.color = "#333";
+    // 로딩 상태 표시
+    locationDisplay.textContent = "주소 검색 중...";
+    locationDisplay.style.color = "#999";
     
-    // localStorage에 저장
-    localStorage.setItem("userLocation", locationText);
-    localStorage.setItem("userLatitude", lat);
-    localStorage.setItem("userLongitude", lng);
-    
-    // 저장된 위치 정보 업데이트
-    document.getElementById("savedLocationInfo").style.display = "block";
-    document.getElementById("savedLocationText").textContent = locationText;
-    
-    console.log("✅ 위치 정보 저장 완료:", locationText);
+    // 백엔드 API 호출
+    fetch(`${BASE_URL}/location/reverse-geocode`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            latitude: lat,
+            longitude: lng
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        // 주소 표시
+        const locationText = data.address;
+        locationDisplay.textContent = locationText;
+        locationDisplay.style.color = "#333";
+        
+        // localStorage에 저장 (주소 + 좌표)
+        localStorage.setItem("userLocation", locationText);
+        localStorage.setItem("userLatitude", lat);
+        localStorage.setItem("userLongitude", lng);
+        localStorage.setItem("userRegion1", data.region_1depth); // 시/도
+        localStorage.setItem("userRegion2", data.region_2depth); // 구/군
+        localStorage.setItem("userRegion3", data.region_3depth); // 동/읍/면
+        
+        // 저장된 위치 정보 업데이트
+        document.getElementById("savedLocationInfo").style.display = "block";
+        document.getElementById("savedLocationText").textContent = locationText;
+        
+        console.log("✅ 위치 정보 저장 완료:", locationText);
+        console.log("   행정구역:", data.region_1depth, data.region_2depth, data.region_3depth);
+    })
+    .catch(error => {
+        console.error("❌ 주소 변환 실패:", error);
+        
+        // 에러 시 좌표만 표시
+        const locationText = `위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`;
+        
+        // 에러 메시지 파싱 시도
+        let errorMsg = " (주소 변환 실패)";
+        if (error.message && error.message.includes("Kakao Map API")) {
+            errorMsg = " (Kakao Map API 비활성화)";
+        }
+        
+        locationDisplay.textContent = locationText + errorMsg;
+        locationDisplay.style.color = "#e74c3c";
+        
+        // 좌표만 저장
+        localStorage.setItem("userLocation", locationText);
+        localStorage.setItem("userLatitude", lat);
+        localStorage.setItem("userLongitude", lng);
+        
+        document.getElementById("savedLocationInfo").style.display = "block";
+        document.getElementById("savedLocationText").textContent = locationText;
+    });
 }
 
 function refreshLocation() {

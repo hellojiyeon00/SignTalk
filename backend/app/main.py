@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.disaster import router as disaster_router
+from app.api.location import router as location_router
 from app.api.sockets import sio
 from app.services.disaster_service import DisasterService
 
@@ -28,6 +29,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/auth", tags=["인증"])
 app.include_router(chat_router, prefix="/chat", tags=["채팅"])
 app.include_router(disaster_router, prefix="/disaster", tags=["재난문자"])
+app.include_router(location_router, prefix="/location", tags=["위치"])
 
 # 서버 시작 시 실행할 초기화 작업 - Socket.IO 래핑 전에 등록!
 @app.on_event("startup")
