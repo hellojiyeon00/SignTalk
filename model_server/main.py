@@ -7,25 +7,35 @@ main.py
 """
 
 from __future__ import annotations
-from typing import Any, Dict, Optional
+
+import os
+import logging
 import traceback
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
+from core.logging_config import setup_logging
 from registry import get_handler
-
-from pathlib import Path
-from dotenv import load_dotenv
 
 ENV_PATH = Path(__file__).resolve().with_name(".env")
 load_dotenv(dotenv_path=str(ENV_PATH), override=True)
 
-
 # .env 로드 (export 대신 사용)
 load_dotenv()
 
+# Logging init (app 생성 전에 1회)
+setup_logging(
+    log_dir=os.getenv("LOG_DIR", "logs"),
+    log_file=os.getenv("LOG_FILE", "model_server.log"),
+    level=os.getenv("LOG_LEVEL", "INFO")
+)
+logger = logging.getLogger(__name__)
+
+# FastAPI app
 app = FastAPI(title="Model Server", version="2.0.0")
 
 
