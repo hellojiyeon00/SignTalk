@@ -43,15 +43,70 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // 검색창 엔터키
-    ["searchName", "searchId"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("keypress", (e) => {
-                if (e.key === "Enter") searchUser();
-            });
-        }
-    });
+    // 검색창 엔터키 및 자동완성
+    const searchNameInput = document.getElementById("searchName");
+    const searchIdInput = document.getElementById("searchId");
+    
+    let nameAutocompleteTimeout = null;
+    let idAutocompleteTimeout = null;
+    
+    if (searchNameInput) {
+        searchNameInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") searchUser();
+        });
+        
+        // 실시간 자동완성 (이름)
+        searchNameInput.addEventListener("input", (e) => {
+            clearTimeout(nameAutocompleteTimeout);
+            const query = e.target.value.trim();
+            
+            if (!query) {
+                document.getElementById("nameAutocomplete").style.display = "none";
+                return;
+            }
+            
+            // 300ms 디바운싱
+            nameAutocompleteTimeout = setTimeout(() => {
+                autocompleteSearch("name", query);
+            }, 300);
+        });
+        
+        // 포커스 아웃 시 드롭다운 닫기
+        searchNameInput.addEventListener("blur", () => {
+            setTimeout(() => {
+                document.getElementById("nameAutocomplete").style.display = "none";
+            }, 200);
+        });
+    }
+    
+    if (searchIdInput) {
+        searchIdInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") searchUser();
+        });
+        
+        // 실시간 자동완성 (ID)
+        searchIdInput.addEventListener("input", (e) => {
+            clearTimeout(idAutocompleteTimeout);
+            const query = e.target.value.trim();
+            
+            if (!query) {
+                document.getElementById("idAutocomplete").style.display = "none";
+                return;
+            }
+            
+            // 300ms 디바운싱
+            idAutocompleteTimeout = setTimeout(() => {
+                autocompleteSearch("id", query);
+            }, 300);
+        });
+        
+        // 포커스 아웃 시 드롭다운 닫기
+        searchIdInput.addEventListener("blur", () => {
+            setTimeout(() => {
+                document.getElementById("idAutocomplete").style.display = "none";
+            }, 200);
+        });
+    }
 });
 
 // ======== 소켓 이벤트 ========
@@ -102,6 +157,114 @@ async function fetchMyFriends() {
     }
 }
 
+// ======== 초성 검색 유틸리티 ========
+function getChosung(str) {
+    /* 한글 문자열을 초성으로 변환 */
+    const chosungList = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+    let result = '';
+    
+    for (let i = 0; i < str.length; i++) {
+        const code = str.charCodeAt(i) - 44032;
+        if (code > -1 && code < 11172) {
+            result += chosungList[Math.floor(code / 588)];
+        } else {
+            result += str.charAt(i);
+        }
+    }
+    return result;
+}
+
+function matchChosung(target, query) {
+    /* 초성 매칭 검사 */
+    const targetChosung = getChosung(target);
+    const queryChosung = getChosung(query);
+    
+    // 완전 일치 검사
+    if (target.includes(query)) return true;
+    
+    // 초성 일치 검사
+    if (targetChosung.includes(queryChosung)) return true;
+    
+    return false;
+}
+
+async function autocompleteSearch(type, query) {
+    /* 자동완성 검색 */
+    try {
+        let queryParams = `my_id=${myId}`;
+        
+        if (type === "name") {
+            queryParams += `&name=${encodeURIComponent(query)}`;
+        } else {
+            queryParams += `&member_id=${encodeURIComponent(query)}`;
+        }
+        
+        const response = await fetch(`${BASE_URL}/chat/search?${queryParams}`);
+        const results = await response.json();
+        
+        const dropdownId = type === "name" ? "nameAutocomplete" : "idAutocomplete";
+        const dropdown = document.getElementById(dropdownId);
+        
+        if (!dropdown) return;
+        
+        dropdown.innerHTML = "";
+        
+        if (results.length === 0) {
+            dropdown.innerHTML = '<div class="autocomplete-empty">검색 결과가 없습니다</div>';
+            dropdown.style.display = "block";
+            return;
+        }
+        
+        // 초성 필터링 (프론트엔드에서 추가 필터링)
+        const filteredResults = results.filter(user => {
+            if (type === "name") {
+                return matchChosung(user.user_name, query);
+            } else {
+                return user.member_id.toLowerCase().includes(query.toLowerCase());
+            }
+        });
+        
+        if (filteredResults.length === 0) {
+            dropdown.innerHTML = '<div class="autocomplete-empty">검색 결과가 없습니다</div>';
+            dropdown.style.display = "block";
+            return;
+        }
+        
+        filteredResults.forEach(user => {
+            const item = document.createElement("div");
+            item.className = "autocomplete-item";
+            item.innerHTML = `
+                <div>
+                    <span style="font-weight:bold;">${user.user_name}</span>
+                    <span style="font-size:11px; color:#666; margin-left:5px;">(${user.member_id})</span>
+                </div>
+                <button onclick="addFriend('${user.member_id}')" 
+                        style="font-size:11px; padding:3px 8px; background:#007bff; color:white; border:none; border-radius:3px; cursor:pointer; white-space:nowrap; min-width:40px;">
+                    추가
+                </button>
+            `;
+            
+            // 클릭 시 입력창에 값 채우기
+            item.addEventListener("mousedown", (e) => {
+                if (e.target.tagName !== 'BUTTON') {
+                    if (type === "name") {
+                        document.getElementById("searchName").value = user.user_name;
+                    } else {
+                        document.getElementById("searchId").value = user.member_id;
+                    }
+                    dropdown.style.display = "none";
+                }
+            });
+            
+            dropdown.appendChild(item);
+        });
+        
+        dropdown.style.display = "block";
+    } catch (error) {
+        console.error("❌ 자동완성 검색 실패:", error);
+    }
+}
+
 async function searchUser() {
     /* 사용자 검색 */
     const nameVal = document.getElementById("searchName").value.trim();
@@ -119,13 +282,19 @@ async function searchUser() {
 
         const response = await fetch(`${BASE_URL}/chat/search?${queryParams}`);
         const results = await response.json();
+        
+        // 초성 필터링 적용 (이름 검색 시)
+        let filteredResults = results;
+        if (nameVal) {
+            filteredResults = results.filter(user => matchChosung(user.user_name, nameVal));
+        }
 
         const resultArea = document.getElementById("searchResultArea");
         const resultList = document.getElementById("searchResultList");
         resultArea.style.display = "block";
         resultList.innerHTML = "";
 
-        if (results.length === 0) {
+        if (filteredResults.length === 0) {
             resultList.innerHTML = `
                 <div style='padding:10px; color:#777; font-size:13px;'>
                     검색 결과가 없습니다.
@@ -133,7 +302,7 @@ async function searchUser() {
             return;
         }
 
-        results.forEach(user => {
+        filteredResults.forEach(user => {
             const itemDiv = document.createElement("div");
             itemDiv.className = "friend-item";
             itemDiv.style.marginBottom = "5px";
@@ -147,7 +316,8 @@ async function searchUser() {
             addBtn.textContent = "추가";
             addBtn.style.cssText = `
                 font-size:12px; padding:4px 8px; cursor:pointer; 
-                background:#007bff; color:white; border:none; border-radius:4px;`;
+                background:#007bff; color:white; border:none; border-radius:4px; 
+                white-space:nowrap; min-width:45px;`;
             addBtn.onclick = (e) => {
                 e.stopPropagation();
                 addFriend(user.member_id);
@@ -167,6 +337,10 @@ function closeSearch() {
     document.getElementById("searchResultArea").style.display = "none";
     document.getElementById("searchName").value = "";
     document.getElementById("searchId").value = "";
+    
+    // 자동완성 드롭다운도 닫기
+    document.getElementById("nameAutocomplete").style.display = "none";
+    document.getElementById("idAutocomplete").style.display = "none";
 }
 
 async function addFriend(targetId) {
