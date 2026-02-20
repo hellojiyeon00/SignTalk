@@ -12,46 +12,52 @@ from app.services.chat_service import ChatService
 
 router = APIRouter()
 
-
+# @router.get("/search"): GET 요청으로 친구 검색 처리
 @router.get("/search")
 def search_user(
     my_id: str,
     name: Optional[str] = None,
     member_id: Optional[str] = None,
+    # DB 세션 의존성 주입
     db: Session = Depends(get_db)
 ):
     """친구 검색 (이름 또는 아이디)"""
     return ChatService.search_users(db, my_id, name, member_id)
 
 
+# @router.post("/room"): POST 요청으로 채팅방 생성 또는 기존 방 조회 처리
 @router.post("/room", response_model=RoomResponse)
 def get_or_create_room(req: RoomCreateRequest, db: Session = Depends(get_db)):
     """채팅방 생성 또는 기존 방 조회"""
     return ChatService.create_or_get_room(db, req.my_id, req.target_id)
 
 
+# @router.get("/list"): GET 요청으로 내 채팅방 목록 조회 처리
 @router.get("/list")
 def get_my_rooms(user_id: str, db: Session = Depends(get_db)):
     """내 채팅방 목록 조회"""
     return ChatService.get_my_rooms(db, user_id)
 
 
+# @router.get("/history/{room_id}"): GET 요청으로 특정 채팅방의 대화 내역 조회 처리
 @router.get("/history/{room_id}")
 def get_chat_history(room_id: int, db: Session = Depends(get_db)):
     """채팅방 대화 내역 조회"""
     return ChatService.get_chat_history(db, room_id)
 
 
+# @router.post("/friend/block"): POST 요청으로 친구 차단 처리
 @router.post("/friend/block")
 def block_friend(
     my_id: str,
     friend_id: str,
     db: Session = Depends(get_db)
 ):
-    """친구 차단 (소프트 삭제)"""
-    return ChatService.delete_friend(db, my_id, friend_id)
+    """친구 차단 (소프트 차단)"""
+    return ChatService.block_friend(db, my_id, friend_id)
 
 
+# @router.post("/friend/unblock"): POST 요청으로 친구 차단 해제 처리
 @router.post("/friend/unblock")
 def unblock_friend(
     my_id: str,
@@ -62,6 +68,7 @@ def unblock_friend(
     return ChatService.unblock_friend(db, my_id, friend_id)
 
 
+# @router.get("/friends"): GET 요청으로 친구 목록 조회 처리
 @router.get("/friends")
 def get_friend_list(
     user_id: str,
@@ -69,4 +76,3 @@ def get_friend_list(
 ):
     """친구 목록 조회"""
     return ChatService.get_friend_list(db, user_id)
-    return ChatService.get_friend_list_with_status(db, user_id)

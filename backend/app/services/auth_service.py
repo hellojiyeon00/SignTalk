@@ -10,10 +10,11 @@ from fastapi import HTTPException
 from app.api.schemas import UserSignup, UserLogin, UserUpdate
 
 
-# 인증 클래스 AuthService 정의
+# 인증 클래스 정의
 class AuthService:
     """인증 관련 비즈니스 로직 처리"""
 
+    # @staticmethod: 클래스 이름으로 직접 호출 가능한 정적 메서드 정의
     @staticmethod
     def create_user(db: Session, user_data: UserSignup):
         """회원가입 처리
