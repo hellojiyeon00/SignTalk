@@ -34,8 +34,14 @@
 
             <div class="sidebar-search">
                 <div class="search-inputs">
-                    <input type="text" id="searchName" placeholder="이름 검색">
-                    <input type="text" id="searchId" placeholder="ID 검색">
+                    <div style="position: relative; flex: 1;">
+                        <input type="text" id="searchName" placeholder="이름 검색" autocomplete="off">
+                        <div id="nameAutocomplete" class="autocomplete-dropdown" style="display:none;"></div>
+                    </div>
+                    <div style="position: relative; flex: 1;">
+                        <input type="text" id="searchId" placeholder="ID 검색" autocomplete="off">
+                        <div id="idAutocomplete" class="autocomplete-dropdown" style="display:none;"></div>
+                    </div>
                 </div>
                 <button onclick="searchUser()" class="btn-search">사용자 검색</button>
             </div>
