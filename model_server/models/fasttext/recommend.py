@@ -14,6 +14,7 @@ import time
 from typing import Dict, List, Tuple, Any
 
 from sqlalchemy import create_engine, text
+from .loader import embed_token
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ def parse_vector(raw: Any) -> List[float]:
         return []
     
     # 대괄호 제거
-    if s[0] == "[' and s[-1] == ']":
+    if s[0] == "[" and s[-1] == "]":
         s = s[1:-1].strip()
 
     # 구분자 통일(콤마/공백 혼용 대응)
@@ -173,16 +174,19 @@ def recommend_by_similarity(token: str, top_k: int = 5) -> List[Tuple[str, float
     if not q:
         return []
     
-    # 쿼리 토큰이 corpus에 존재하면 "자기 자신" 제외 추천이 자연스러움
-    q_item = _CORPUS_CACHE.get(q)
-    if not q_item:
+    # 입력 토큰은 corpus에 없어도 임베딩 가능해야 함
+    q_vec = embed_token(q)
+    if not q_vec:
         return []
-    
-    _, q_vec, q_norm = q_item
+
+    q_norm = _l2_norm(q_vec)
+    if q_norm == 0.0:
+        return []
 
     scored: List[Tuple[str, float, str]] = []
     for w, (url, vec, norm) in _CORPUS_CACHE.items():
-        if w == q:
+        # 입력 토큰이 corpus에 있을 때만 자기 자신 제외
+        if q in _CORPUS_CACHE and w == q:
             continue
 
         # cosine = dot(a, b) / (||a|| * ||b||)
