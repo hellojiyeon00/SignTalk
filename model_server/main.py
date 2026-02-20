@@ -7,8 +7,8 @@ main.py
 """
 
 from __future__ import annotations
-
 from typing import Any, Dict, Optional
+import traceback
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -43,17 +43,18 @@ def health() -> dict:
 
 
 @app.post("/infer/{task}")
-def infer(task: str, req: InferRequest, request: Request):
-    # 호출자 식별 (backend/curl 등)
-    caller = request.headers.get("x-caller", "unknown")
-    print(f"[INFER] task={task} x-caller={caller}")
-    
+def infer(task: str, req: InferRequest):
     handler = get_handler(task)
     if handler is None:
         raise HTTPException(status_code=404, detail=f"unknown task: {task}")
 
     try:
         result = handler(req.model_dump())
+        if result is None:
+            raise RuntimeError(f"handler for task '{task}' returned None")
+
         return {"ok": True, "task": task, "result": result}
+
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
