@@ -9,7 +9,7 @@ loader.py
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 # pip install fasttext
 import fasttext
@@ -37,3 +37,28 @@ def get_model_bundle() -> Dict[str, Any]:
     }
 
     return _MODEL_BUNDLE
+
+
+def embed_token(token: str) -> Optional[List[float]]:
+    """
+    단일 토큰을 fastText 임베딩 벡터로 변환한다.
+    corpus에 존재하지 않아도 벡터는 생성되어야 한다.
+    """
+    if token is None:
+        return None
+    
+    t = token.strip()
+    if not t:
+        return None
+    
+    bundle = get_model_bundle()
+    model = bundle.get("model") if isinstance(bundle, dict) else None
+    if model is None:
+        return None
+    
+    try:
+        vec = model.get_word_vector(t)
+        return vec.tolist() if hasattr(vec, "tolist") else list(vec)
+    except Exception:
+        return None
+
