@@ -74,10 +74,16 @@
 
         <div class="chat-area" id="chatArea">
             <div class="chat-header" id="chatHeader">
+                <button id="backToChatListBtn" onclick="leaveChatRoom()" style="display:none; margin-right: 10px; border: none; background: none; cursor: pointer; font-size: 1.2rem; color: #666;">⬅️</button>
                 <span id="chatTitle">대화 상대를 선택해주세요</span>
             </div>
 
             <div class="chat-messages" id="messages">
+                <div id="defaultChatView" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #999; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 20px;">💬</div>
+                    <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;">수어톡에 오신 것을 환영합니다!</div>
+                    <div style="font-size: 0.95rem;">왼쪽에서 친구를 선택하여 대화를 시작하세요.</div>
+                </div>
                 </div>
 
             <div class="chat-input">

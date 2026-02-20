@@ -221,6 +221,13 @@ async function startChat(friend, clickedElement) {
         document.getElementById("messages").innerHTML = "";
         document.getElementById("chatTitle").textContent = `${friend.user_name}님과의 대화`;
         document.getElementById("messageInput").focus();
+        
+        // 뒤로가기 버튼 표시
+        document.getElementById("backToChatListBtn").style.display = "inline-block";
+        
+        // 디폴트 뷰 숨기기
+        const defaultView = document.getElementById("defaultChatView");
+        if (defaultView) defaultView.style.display = "none";
 
         // 소켓 방 입장
         socket.emit("join_room", { room: currentRoomName, username: myId });
@@ -253,6 +260,43 @@ async function startChat(friend, clickedElement) {
         console.error("❌ 채팅방 입장 실패:", error);
         alert("채팅방을 불러오는 데 실패했습니다.");
     }
+}
+
+function leaveChatRoom() {
+    /* 채팅방 나가기 - 디폴트 뷰로 복귀 */
+    // 소켓 방 퇴장
+    if (currentRoomName) {
+        socket.emit("leave_room", { room: currentRoomName, username: myId });
+        console.log(`🚪 [Socket] 방 퇴장: ${currentRoomName}`);
+    }
+    
+    // 상태 초기화
+    currentRoomId = null;
+    currentRoomName = null;
+    
+    // UI 초기화
+    document.getElementById("chatTitle").textContent = "대화 상대를 선택해주세요";
+    document.getElementById("messages").innerHTML = "";
+    document.getElementById("messageInput").value = "";
+    document.getElementById("backToChatListBtn").style.display = "none";
+    
+    // 디폴트 뷰 표시
+    const defaultView = document.getElementById("defaultChatView");
+    if (defaultView) {
+        document.getElementById("messages").innerHTML = `
+            <div id="defaultChatView" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #999; text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 20px;">💬</div>
+                <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;">수어톡에 오신 것을 환영합니다!</div>
+                <div style="font-size: 0.95rem;">왼쪽에서 친구를 선택하여 대화를 시작하세요.</div>
+            </div>
+        `;
+    }
+    
+    // 친구 목록 활성화 해제
+    const allItems = document.querySelectorAll('.friend-item');
+    allItems.forEach(item => item.classList.remove('active'));
+    
+    console.log("✅ 채팅방 나가기 완료");
 }
 
 function sendMessage() {
