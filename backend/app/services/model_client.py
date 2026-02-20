@@ -18,8 +18,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-MODEL_SERVER_BASE_URL = os.getenv("MODEL_SERVER_URL", "http://127.0.0.1:8000")
-MODEL_SERVER_TIMEOUT_SEC = float(os.getenv("MODEL_SERVER_TIMEOUT_SEC", "10"))
+MODEL_SERVER_BASE_URL = os.getenv("MODEL_SERVER_URL", "http://127.0.0.1:8001")
+MODEL_SERVER_TIMEOUT_SEC = float(os.getenv("MODEL_SERVER_TIMEOUT_SEC", "30"))
 
 
 def _sha256(text: str) -> str:
@@ -60,6 +60,9 @@ class ModelClient:
     def __init__(self, base_url: str = MODEL_SERVER_BASE_URL, timeout_sec: float = MODEL_SERVER_TIMEOUT_SEC):
         self.base_url = base_url.rstrip("/")
         self.timeout_sec = timeout_sec
+        # httpx Client 재사용(keep-alive)로 왕복 지연 감소
+        timeout = httpx.Timeout(connect=3.0, read=self.timeout_sec, write=5.0, pool=5.0)
+        self._client = httpx.Client(timeout=timeout, trust_env=False)
 
     async def infer(self, task: str, text: str) -> Dict[str, Any]:
         """
@@ -74,15 +77,20 @@ class ModelClient:
 
         url = f"{self.base_url}/infer/{task.strip()}"
 
-        async with httpx.AsyncClient(timeout=self.timeout_sec) as client:
+        timeout = httpx.Timeout(connect=0.5, read=self.timeout_sec, write=2.0, pool=2.0)
+        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
             response = await client.post(url, json={"text": text}, headers={"X-Caller": "backend"})
 
         response.raise_for_status()
         return response.json()
 
-    def infer_sync(self, task: str, text: str) -> Dict[str, Any]:
+    def infer_sync(self, task: str, text: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         멀티 모델 단일 model_server 호출 (동기)
+
+        - /infer/{task} 로 요청
+        - 기본 body: {"text": "..."}
+        - payload가 있으면 body에 {"payload": {...}}를 추가
         """
         if not isinstance(task, str) or not task.strip():
             raise ValueError("task must be a non-empty string")
@@ -99,16 +107,34 @@ class ModelClient:
             _sha256(text),
             text[:80],
         )
+        logger.info("[ModelClient] payload=%s", payload)
 
-        with httpx.Client(timeout=self.timeout_sec) as client:
-            response = client.post(url, json={"text": text}, headers={"X-Caller": "backend"})
+        body: Dict[str, Any] = {"text": text}
+        if payload:
+            body["payload"] = payload
+
+        response = self._client.post(
+            url,
+            json=body,
+            headers={"X-Caller": "backend"}
+        )
 
         elapsed_ms = int((time.time() - t0) * 1000)
         logger.info(f"[ModelClient] RESP {response.status_code} elapsed_ms={elapsed_ms}")
 
         response.raise_for_status()
         return response.json()
-    
+
+    def close(self) -> None:
+        """
+        내부 httpx client 리소스 정리.
+        (테스트/스크립트에서 유용. 서버 프로세스에서는 생략해도 보통 문제 없음)
+        """
+        try:
+            self._client.close()
+        except Exception:
+            pass
+        
     def infer_payload_sync(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         payload 기반 infer (동기)
@@ -121,10 +147,12 @@ class ModelClient:
             raise ValueError("payload must be a dict")
 
         url = f"{self.base_url}/infer/{task.strip()}"
+        logger.info("[ModelClient] base_url=%s resolved_url=%s", self.base_url, url)
         t0 = time.time()
 
         logger.info(f"[ModelClient] POST {url} timeout={self.timeout_sec}s (payload)")
-        with httpx.Client(timeout=self.timeout_sec) as client:
+        timeout = httpx.Timeout(connect=3.0, read=self.timeout_sec, write=5.0, pool=5.0)
+        with httpx.Client(timeout=timeout, trust_env=False) as client:
             response = client.post(
                 url,
                 json={"payload": payload},

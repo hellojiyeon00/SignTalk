@@ -128,9 +128,14 @@ async def handle_send_message(sid, data):
             f"room_id={room_id} sid={sid} msg_len={len(msg)}"
         )
 
-
             msg_norm = normalize_input_text(msg)
+
             result = await run_in_threadpool(ChatService.text_to_gloss_and_urls_sync, msg_norm)
+
+            if not isinstance(result, dict):
+                logger.error("[WS] ChatService returned non-dict: %r", result)
+                result = {"gloss": None, "urls": [], "miss": [], "meta": None}
+
             gloss = result.get("gloss")
             urls = result.get("urls", [])
             miss = result.get("miss", [])
@@ -168,7 +173,7 @@ async def handle_send_message(sid, data):
                 )
 
                 # 같은 방 모두에게 동일 payload breadcast
-                await sio.emit("receive_message", payload, room=room)            
+                await sio.emit("receive_message", payload, room=room)
                 
         except Exception as e:
             logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
@@ -211,4 +216,5 @@ async def handle_send_landmarks(sid, data):
                 await sio.emit("receive_message", payload, room=room_name)
                 
         except Exception as e:
-            logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
+            logger.exception("❌ [소켓 에러] 메시지 처리 실패")
+            # logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
