@@ -18,6 +18,7 @@ disaster_queue = asyncio.Queue()
 
 # 재난문자 관련 비즈니스 로직을 처리하는 클래스
 class DisasterService:
+    
     # @staticmethod: 정적 메서드로 정의하여 인스턴스 생성 없이 호출 가능
     @staticmethod
     def get_disaster_message(character_id: int):
@@ -25,14 +26,15 @@ class DisasterService:
         트리거가 알려준 ID를 기반으로 재난문자의 상세 내용을 DB에서 가져옵니다.
         
         Returns:
-            dict: {"id", "message", "type_code", "type_name"}
+            dict: {"id", "message", "type_code", "type_name", "region"}
         """
         # DB 세션 생성
         db = SessionLocal()
         try:
-            # SQL: 재난문자 상세 조회 (character_id로 조회, 등급 포함)
+            # SQL: 재난문자 상세 조회 (character_id로 조회, 등급 및 지역 포함)
             sql = text("""
-                SELECT character_id, character_content, character_type_code, disaster_emrg_step_nm
+                SELECT character_id, character_content, character_type_code, 
+                       disaster_emrg_step_nm, disaster_rcptn_rgn_nm
                 FROM multicampus_schema.characters 
                 WHERE character_id = :id
             """)
@@ -40,13 +42,14 @@ class DisasterService:
             # SQL 실행 및 결과 가져오기
             result = db.execute(sql, {"id": character_id}).fetchone()
             
-            # result[0]=id, result[1]=message, result[2]=type_code, result[3]=emrg_step_nm
+            # result[0]=id, [1]=message, [2]=type_code, [3]=emrg_step_nm, [4]=rcptn_rgn_nm
             if result:
                 return {
                     "id": result[0], 
                     "message": result[1],
                     "type_code": result[2],  # EX(위급), EM(긴급), SA(안전안내)
-                    "type_name": result[3] or result[2]  # 긴급단계명 (없으면 코드 사용)
+                    "type_name": result[3] or result[2],  # 긴급단계명 (없으면 코드 사용)
+                    "region": result[4]  # 수신 지역명
                 }
             return None
         
@@ -96,18 +99,19 @@ class DisasterService:
                         KST = timezone(timedelta(hours=9))
                         now_kst = datetime.now(KST).strftime("%H:%M")
                         
-                        # 재난문자 데이터 준비 (등급 정보 포함)
+                        # 재난문자 데이터 준비 (등급 및 지역 정보 포함)
                         disaster_data = {
                             "id": alert_data["id"],
                             "message": alert_data["message"],
                             "type_code": alert_data["type_code"],
                             "type_name": alert_data["type_name"],
+                            "region": alert_data["region"],
                             "time": now_kst
                         }
                         
                         # 큐에 추가 (모든 SSE 연결이 이 큐에서 읽음)
                         await disaster_queue.put(disaster_data)
-                        logger.info(f"🚨 [재난문자 {alert_data['type_code']}] 큐에 추가: {alert_data['message'][:20]}...")
+                        logger.info(f"🚨 [재난문자 {alert_data['type_code']}] [{alert_data['region']}] 큐에 추가: {alert_data['message'][:20]}...")
 
         except Exception as e:
             logger.error(f"❌ 재난 문자 PostgreSQL 리스너 에러: {e}")
@@ -139,12 +143,7 @@ class DisasterService:
                         timeout=1.0
                     )
                     
-                    # TODO: 사용자 위치 기반 필터링 (나중에 구현)
-                    # user_location = get_user_location(user_id)
-                    # if not is_location_match(disaster_data["region"], user_location):
-                    #     continue
-                    
-                    # SSE 이벤트 전송
+                    # SSE 이벤트 전송 (프론트엔드에서 필터링)
                     yield {
                         "event": "disaster",
                         "id": str(disaster_data.get("id", "")),
