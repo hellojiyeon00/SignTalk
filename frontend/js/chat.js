@@ -671,7 +671,7 @@ function connectDisasterSSE() {
         
         // 3) 브라우저 알림 표시 (등급에 따른 제목)
         const alertTitle = getDisasterTitle(data.type_code, data.type_name);
-        showBrowserNotification(alertTitle, data.message);
+        showBrowserNotification(alertTitle, data.message, data.type_code);
         
         // 4) 재난문자 버튼 업데이트 (등급에 따른 스타일 + 개수)
         updateDisasterButton(data.type_code, unreadDisasterCount);
@@ -728,13 +728,16 @@ function requestNotificationPermission() {
 // ---------------------------------------------------------
 // [신규] 3. 브라우저 알림 표시 (OS 차원 알림)
 // ---------------------------------------------------------
-function showBrowserNotification(title, message) {
+function showBrowserNotification(title, message, typeCode = 'EM') {
     // 권한이 허용된 경우에만 알림 표시
     if ("Notification" in window && Notification.permission === "granted") {
+        // 위급/긴급 재난은 사용자가 직접 닫아야 함
+        const requireInteraction = (typeCode === 'EX' || typeCode === 'EM');
+        
         const notification = new Notification(title, {
             body: message,
             tag: "disaster-alert", // 같은 태그는 중복 알림 방지
-            requireInteraction: false, // 자동으로 사라지게 (true면 사용자가 클릭해야 사라짐)
+            requireInteraction: requireInteraction, // 위급/긴급은 true, 안전안내는 false
         });
         
         // 알림 클릭 시 재난문자 전용방 열기
@@ -744,8 +747,11 @@ function showBrowserNotification(title, message) {
             notification.close();
         };
         
-        // 5초 후 자동으로 알림 닫기
-        setTimeout(() => notification.close(), 5000);
+        // 안전안내(SA)만 5초 후 자동으로 알림 닫기
+        if (typeCode === 'SA') {
+            setTimeout(() => notification.close(), 5000);
+        }
+        // EX(위급), EM(긴급)은 사용자가 직접 닫을 때까지 유지
     }
 }
 
@@ -800,29 +806,42 @@ function showToast(message, typeCode = 'EM', typeName = null) {
     toast.className = "toast-message";
     toast.style.backgroundColor = config.bgColor;
     toast.style.borderLeft = `4px solid ${config.borderColor}`;
+    toast.style.position = "relative"; // 닫기 버튼 위치를 위해
     
     // 글자가 너무 길면 자르기 (요약해서 보여주기)
     const shortMessage = message.length > 30 ? message.substring(0, 30) + "..." : message;
     const displayTitle = typeName || config.title;
     
+    // 위급/긴급 재난은 닫기 버튼 추가
+    const closeButton = (typeCode === 'EX' || typeCode === 'EM') 
+        ? `<button onclick="this.parentElement.remove()" style="position:absolute; top:5px; right:5px; background:none; border:none; color:${config.color}; font-size:16px; cursor:pointer; padding:0; width:20px; height:20px;">✕</button>`
+        : '';
+    
     toast.innerHTML = `
+        ${closeButton}
         <strong style="color:${config.color};">${config.icon} ${displayTitle}</strong><br>
         <span style="font-size: 13px; color: #333;">${shortMessage}</span>
     `;
     
-    // 팝업을 클릭하면 재난문자 전용방이 열리도록 설정
-    toast.onclick = () => {
-        openDisasterRoom();
-        toast.remove(); // 클릭하면 팝업은 바로 닫힘
+    // 팝업을 클릭하면 재난문자 전용방이 열리도록 설정 (닫기 버튼 제외)
+    toast.onclick = (e) => {
+        // 닫기 버튼 클릭이 아닐 때만 실행
+        if (e.target.tagName !== 'BUTTON') {
+            openDisasterRoom();
+            toast.remove(); // 클릭하면 팝업은 바로 닫힘
+        }
     };
 
     container.appendChild(toast);
 
-    // 등급에 따라 다른 표시 시간 (위급재난은 10초, 나머지는 5초)
-    const displayTime = typeCode === 'EX' ? 10000 : 5000;
-    setTimeout(() => {
-        if (toast.parentElement) toast.remove();
-    }, displayTime);
+    // 등급에 따라 자동 제거 설정
+    // EX(위급), EM(긴급): 자동으로 사라지지 않음 (사용자가 직접 닫아야 함)
+    // SA(안전안내): 5초 후 자동 제거
+    if (typeCode === 'SA') {
+        setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+        }, 5000);
+    }
 }
 
 // ---------------------------------------------------------
