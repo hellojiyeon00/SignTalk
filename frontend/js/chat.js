@@ -642,6 +642,8 @@ function logout() {
 // [신규] 1. SSE로 재난 문자 실시간 수신
 // ---------------------------------------------------------
 let disasterEventSource = null;
+let latestDisasterType = null; // 가장 최근 재난문자 등급 저장
+let unreadDisasterCount = 0; // 읽지 않은 재난문자 개수
 
 function connectDisasterSSE() {
     /* SSE 연결로 재난문자 수신 */
@@ -657,14 +659,22 @@ function connectDisasterSSE() {
         const data = JSON.parse(event.data);
         console.log("🚨 [SSE] 재난문자 수신:", data);
         
-        // 1) 우측 하단에 팝업(Toast) 띄우기
-        showToast(data.message);
+        // 최신 재난문자 등급 저장 및 개수 증가
+        latestDisasterType = data.type_code;
+        unreadDisasterCount++;
         
-        // 2) 재난문자 전용 모달창에도 내용 추가하기
-        addDisasterMessageToRoom(data.message, data.time);
+        // 1) 우측 하단에 팝업(Toast) 띄우기 (등급 정보 포함)
+        showToast(data.message, data.type_code, data.type_name);
         
-        // 3) 브라우저 알림 표시 (다른 탭을 보고 있어도 알림이 뜸)
-        showBrowserNotification("🚨 재난 문자 알림", data.message);
+        // 2) 재난문자 전용 모달창에도 내용 추가하기 (등급 정보 포함)
+        addDisasterMessageToRoom(data.message, data.time, data.type_code, data.type_name);
+        
+        // 3) 브라우저 알림 표시 (등급에 따른 제목)
+        const alertTitle = getDisasterTitle(data.type_code, data.type_name);
+        showBrowserNotification(alertTitle, data.message);
+        
+        // 4) 재난문자 버튼 업데이트 (등급에 따른 스타일 + 개수)
+        updateDisasterButton(data.type_code, unreadDisasterCount);
     });
     
     // 연결 상태 이벤트
@@ -740,18 +750,65 @@ function showBrowserNotification(title, message) {
 }
 
 // ---------------------------------------------------------
+// [신규] 3-1. 재난문자 등급별 설정 가져오기
+// ---------------------------------------------------------
+function getDisasterConfig(typeCode) {
+    /* 재난문자 등급에 따른 설정 반환 */
+    const configs = {
+        'EX': { // 위급재난 (가장 심각)
+            icon: '🚨',
+            color: '#d32f2f',
+            bgColor: '#ffebee',
+            borderColor: '#ef5350',
+            title: '위급재난'
+        },
+        'EM': { // 긴급재난
+            icon: '⚠️',
+            color: '#f57c00',
+            bgColor: '#fff3e0',
+            borderColor: '#ff9800',
+            title: '긴급재난'
+        },
+        'SA': { // 안전안내
+            icon: 'ℹ️',
+            color: '#1976d2',
+            bgColor: '#e3f2fd',
+            borderColor: '#42a5f5',
+            title: '안전안내'
+        }
+    };
+    
+    // 등록되지 않은 코드는 기본값 (긴급재난)
+    return configs[typeCode] || configs['EM'];
+}
+
+function getDisasterTitle(typeCode, typeName) {
+    /* 재난문자 등급별 제목 생성 */
+    const config = getDisasterConfig(typeCode);
+    return `${config.icon} ${typeName || config.title} 알림`;
+}
+
+// ---------------------------------------------------------
 // [신규] 4. 우측 하단 팝업(Toast) 그리기 함수
 // ---------------------------------------------------------
-function showToast(message) {
+function showToast(message, typeCode = 'EM', typeName = null) {
     const container = document.getElementById("toastContainer");
+    const config = getDisasterConfig(typeCode);
     
     // 알림창(div) 생성
     const toast = document.createElement("div");
     toast.className = "toast-message";
+    toast.style.backgroundColor = config.bgColor;
+    toast.style.borderLeft = `4px solid ${config.borderColor}`;
     
     // 글자가 너무 길면 자르기 (요약해서 보여주기)
     const shortMessage = message.length > 30 ? message.substring(0, 30) + "..." : message;
-    toast.innerHTML = `<strong>🚨 재난 알림</strong><br><span style="font-size: 13px;">${shortMessage}</span>`;
+    const displayTitle = typeName || config.title;
+    
+    toast.innerHTML = `
+        <strong style="color:${config.color};">${config.icon} ${displayTitle}</strong><br>
+        <span style="font-size: 13px; color: #333;">${shortMessage}</span>
+    `;
     
     // 팝업을 클릭하면 재난문자 전용방이 열리도록 설정
     toast.onclick = () => {
@@ -761,37 +818,86 @@ function showToast(message) {
 
     container.appendChild(toast);
 
-    // 5초(5000ms) 뒤에 자동으로 알림창이 사라지게 함
+    // 등급에 따라 다른 표시 시간 (위급재난은 10초, 나머지는 5초)
+    const displayTime = typeCode === 'EX' ? 10000 : 5000;
     setTimeout(() => {
         if (toast.parentElement) toast.remove();
-    }, 5000);
+    }, displayTime);
 }
 
 // ---------------------------------------------------------
 // [신규] 5. 재난문자 전용방 열기/닫기/메시지 추가
 // ---------------------------------------------------------
+function updateDisasterButton(typeCode, count = 0) {
+    /* 재난문자 버튼을 등급에 따라 업데이트 */
+    const button = document.querySelector('[onclick="openDisasterRoom()"]');
+    if (!button) return;
+    
+    const config = getDisasterConfig(typeCode);
+    
+    // 버튼 스타일 업데이트
+    button.style.backgroundColor = config.bgColor;
+    button.style.color = config.color;
+    button.style.borderColor = config.borderColor;
+    
+    // 버튼 텍스트 업데이트 (읽지 않은 개수 표시)
+    const countBadge = count > 0 
+        ? `<span style="background:${config.color}; color:white; border-radius:50%; min-width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; margin-left:5px; padding:0 5px;">${count}</span>`
+        : '';
+    
+    button.innerHTML = `${config.icon} 재난 문자 알림 ${countBadge}`;
+}
+
 function openDisasterRoom() {
-    document.getElementById("disasterModal").style.display = "flex";
+    // 모달 열기
+    const modal = document.getElementById("disasterModal");
+    modal.style.display = "flex";
+    
+    // 모달 제목 업데이트 (최신 등급에 따라)
+    const modalTitle = modal.querySelector("h3");
+    if (modalTitle && latestDisasterType) {
+        const config = getDisasterConfig(latestDisasterType);
+        modalTitle.innerHTML = `${config.icon} 재난 문자 알림방`;
+        modalTitle.style.color = config.color;
+    }
+    
+    // 읽음 처리: 카운트 초기화 및 버튼 업데이트
+    unreadDisasterCount = 0;
+    if (latestDisasterType) {
+        updateDisasterButton(latestDisasterType, 0);
+    }
 }
 
 function closeDisasterRoom() {
     document.getElementById("disasterModal").style.display = "none";
 }
 
-function addDisasterMessageToRoom(msg, time) {
+function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null) {
     const msgBox = document.getElementById("disasterMessages");
+    const config = getDisasterConfig(typeCode);
     
     // 첫 메시지면 안내 문구 지우기
     if (msgBox.innerHTML.includes("이곳에 실시간 재난")) {
         msgBox.innerHTML = ""; 
     }
 
-    // 재난문자 말풍선 디자인
+    // 재난문자 말풍선 디자인 (등급별 색상 적용)
     const alertDiv = document.createElement("div");
-    alertDiv.style.cssText = "background-color: #fff; border: 1px solid #ffcdd2; border-left: 4px solid #d32f2f; padding: 10px; margin-bottom: 10px; border-radius: 4px;";
+    alertDiv.style.cssText = `
+        background-color: ${config.bgColor}; 
+        border: 1px solid ${config.borderColor}; 
+        border-left: 4px solid ${config.color}; 
+        padding: 10px; 
+        margin-bottom: 10px; 
+        border-radius: 4px;
+    `;
     
+    const displayTitle = typeName || config.title;
     alertDiv.innerHTML = `
-        <div style="font-size: 11px; color: #888; margin-bottom: 5px;">${time}</div>
+        <div style="font-size: 12px; font-weight: bold; color: ${config.color}; margin-bottom: 5px;">
+            ${config.icon} ${displayTitle}
+            <span style="font-weight: normal; color: #888; margin-left: 8px;">${time}</span>
+        </div>
         <div style="font-size: 14px; color: #333; line-height: 1.4;">${msg}</div>
     `;
     
