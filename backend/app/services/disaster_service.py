@@ -9,31 +9,40 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 
+# 서버 로거 설정
 logger = logging.getLogger("     disaster_service")
 
 # 전역 재난문자 큐 (PostgreSQL NOTIFY 리스너가 채움)
 disaster_queue = asyncio.Queue()
 
 
+# 재난문자 관련 비즈니스 로직을 처리하는 클래스
 class DisasterService:
+    # @staticmethod: 정적 메서드로 정의하여 인스턴스 생성 없이 호출 가능
     @staticmethod
     def get_disaster_message(character_id: int):
         """
         트리거가 알려준 ID를 기반으로 재난문자의 상세 내용을 DB에서 가져옵니다.
         """
+        # DB 세션 생성
         db = SessionLocal()
         try:
+            # SQL: 재난문자 상세 조회 (character_id로 조회)
             sql = text("""
                 SELECT character_id, character_content
                 FROM multicampus_schema.characters 
                 WHERE character_id = :id
             """)
+            
+            # SQL 실행 및 결과 가져오기
             result = db.execute(sql, {"id": character_id}).fetchone()
             
+            # resilt[0] = character_id, result[1] = character_content
             if result:
                 return {"id": result[0], "message": result[1]}
             return None
-            
+        
+        # 예외 처리 및 세션 종료
         except Exception as e:
             logger.error(f"❌ [DB 에러] 재난 문자 조회 실패: {e}")
             return None
@@ -50,20 +59,25 @@ class DisasterService:
         try:
             # DB 연결 (비동기 루프를 막지 않기 위해 자동 커밋 모드 사용)
             conn = psycopg2.connect(settings.DATABASE_URL)
+            # 자동 커밋 모드 설정 (NOTIFY 수신을 위해 필요)
             conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
             curs = conn.cursor()
             
-            # PostgreSQL LISTEN 시작
+            # DB에 NOTIFY 수신 대기 설정 (characters 테이블의 INSERT 이벤트를 감지)
             curs.execute('LISTEN "characters_INSERT";')
             logger.info("📡 재난 문자 PostgreSQL NOTIFY 수신 대기 시작...")
 
             while True:
                 # 다른 비동기 작업들이 멈추지 않도록 1초씩 양보(sleep)하며 확인
                 await asyncio.sleep(1)
+                # DB에서 알림이 있는지 확인 (블로킹이 되지 않도록 poll 사용)
                 conn.poll()
                 
+                # 만약 알림이 있다면:
                 while conn.notifies:
+                    # 알림 뭉치에서 하나를 꺼냄
                     notify = conn.notifies.pop(0)
+                    # 알림 페이로드에서 character_id 추출(character_id는 트리거에서 보낸 값)
                     character_id = int(notify.payload)
                     
                     # 서비스 계층을 호출하여 메시지 내용 가져오기
