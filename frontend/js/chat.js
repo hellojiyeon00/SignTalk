@@ -126,18 +126,68 @@ socket.on("receive_message", (data) => {
             minute: '2-digit', 
             hour12: false 
         });
-        displayMessage(data.sender, data.sender_name, data.message, timeStr);
+        
+        // 현재 채팅방에서 메시지를 받았는지 확인
+        const isInCurrentRoom = currentRoomName && currentRoomName.includes(data.sender);
+        
+        // 상대방 메시지를 현재 채팅방에서 받으면 즉시 읽음 처리
+        if (data.sender !== myId && isInCurrentRoom) {
+            // 읽은 상태로 표시
+            displayMessage(data.sender, data.sender_name, data.message, timeStr, true);
+            
+            // 즉시 읽음 처리 API 호출
+            if (currentRoomId && currentRoomName) {
+                fetch(`${BASE_URL}/chat/read?room_id=${currentRoomId}&user_id=${myId}`, {
+                    method: "POST"
+                }).then(() => {
+                    console.log("✅ [즉시 읽음] 현재 채팅방 메시지 읽음 처리 완료");
+                    // 발신자에게 읽음 알림 전송
+                    socket.emit("notify_read", { 
+                        room: currentRoomName, 
+                        reader: myId 
+                    });
+                }).catch(err => {
+                    console.error("❌ [즉시 읽음] 읽음 처리 실패:", err);
+                });
+            }
+        } else {
+            // 다른 채팅방의 메시지이거나 내가 보낸 메시지는 읽지 않은 상태
+            displayMessage(data.sender, data.sender_name, data.message, timeStr, false);
+            
+            // 다른 채팅방의 메시지인 경우만 친구 목록 업데이트
+            if (data.sender !== myId && !isInCurrentRoom) {
+                fetchMyFriends();
+            }
+        }
     }
-    
-    // 친구 목록 새로고침 (읽지 않은 메시지 개수와 순서 업데이트)
-    fetchMyFriends();
 });
 
 // 읽지 않은 메시지 알림 (다른 채팅방에서 메시지가 와도 알림)
 socket.on("unread_notification", (data) => {
     console.log("🔔 [Socket] 읽지 않은 메시지 알림:", data);
-    // 친구 목록 새로고침 (새 메시지가 온 친구가 목록 맨 위로)
-    fetchMyFriends();
+    
+    // 현재 그 채팅방에 있다면 알림 무시 (이미 receive_message에서 처리함)
+    const isInCurrentRoom = currentRoomName && currentRoomName.includes(data.sender_id);
+    if (!isInCurrentRoom) {
+        // 친구 목록 새로고침 (새 메시지가 온 친구가 목록 맨 위로)
+        fetchMyFriends();
+    }
+});
+
+// 메시지 읽음 처리 알림 (상대방이 채팅방에 입장하면 내가 보낸 메시지의 "1" 제거)
+socket.on("messages_read", (data) => {
+    console.log("✅ [Socket] 메시지 읽음 처리:", data);
+    
+    // 나 자신이 읽은 게 아니라면 (상대방이 읽음)
+    if (data.reader !== myId) {
+        // 내가 보낸 메시지 중 읽지 않은 것들의 "1" 제거
+        const unreadBadges = document.querySelectorAll('.message-mine .unread-badge');
+        console.log(`🔍 찾은 읽지 않은 배지 개수: ${unreadBadges.length}`);
+        unreadBadges.forEach(badge => {
+            badge.remove();  // style.display = 'none' 대신 완전히 제거
+        });
+        console.log("✅ 모든 읽지 않은 배지 제거 완료");
+    }
 });
 
 // ======== API 함수 ========
@@ -444,7 +494,7 @@ async function startChat(friend, clickedElement) {
         console.log(`🏠 [Socket] 방 입장: ${currentRoomName} (ID: ${currentRoomId})`);
 
         // 과거 대화 내역 로드
-        const historyRes = await fetch(`${BASE_URL}/chat/history/${currentRoomId}`);
+        const historyRes = await fetch(`${BASE_URL}/chat/history/${currentRoomId}?user_id=${myId}`);
         const historyArr = await historyRes.json();
 
         historyArr.forEach(chat => {
@@ -460,7 +510,7 @@ async function startChat(friend, clickedElement) {
                 }
             } catch(e) {}
 
-            displayMessage(chat.sender, chat.sender_name, chat.message, timeStr);
+            displayMessage(chat.sender, chat.sender_name, chat.message, timeStr, chat.is_read);
         });
 
         // 스크롤 맨 아래로
@@ -532,7 +582,7 @@ function sendMessage() {
     input.focus();
 }
 
-function displayMessage(senderId, senderName, msg, time) {
+function displayMessage(senderId, senderName, msg, time, isRead = true) {
     /* 말풍선 렌더링 */
     const msgBox = document.getElementById("messages");
     const isMine = (senderId === myId);
@@ -551,12 +601,26 @@ function displayMessage(senderId, senderName, msg, time) {
     bubbleDiv.className = "message-bubble";
     bubbleDiv.textContent = msg;
 
+    // 시간 + 읽음 표시를 감싸는 래퍼
+    const timeWrapper = document.createElement("div");
+    timeWrapper.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:2px;";
+    
+    // 읽지 않은 메시지 표시 (내가 보낸 메시지만, 시간 위에)
+    if (isMine && !isRead) {
+        const unreadBadge = document.createElement("span");
+        unreadBadge.className = "unread-badge";
+        unreadBadge.textContent = "1";
+        unreadBadge.style.cssText = "color:#ffeb33; font-size:12px; font-weight:bold;";
+        timeWrapper.appendChild(unreadBadge);
+    }
+    
     const timeSpan = document.createElement("span");
     timeSpan.className = "message-time";
     timeSpan.textContent = time;
+    timeWrapper.appendChild(timeSpan);
 
     contentDiv.appendChild(bubbleDiv);
-    contentDiv.appendChild(timeSpan);
+    contentDiv.appendChild(timeWrapper);
     rowDiv.appendChild(nameDiv);
     rowDiv.appendChild(contentDiv);
     msgBox.appendChild(rowDiv);
