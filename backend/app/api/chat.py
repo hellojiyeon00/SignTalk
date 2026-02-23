@@ -68,6 +68,17 @@ def unblock_friend(
     return ChatService.unblock_friend(db, my_id, friend_id)
 
 
+# @router.post("/read"): POST 요청으로 메시지 읽음 처리
+@router.post("/read")
+def mark_messages_as_read(
+    room_id: int,
+    user_id: str,
+    db: Session = Depends(get_db)
+):
+    """채팅방 메시지 읽음 처리"""
+    return ChatService.mark_messages_as_read(db, room_id, user_id)
+
+
 # @router.get("/friends"): GET 요청으로 친구 목록 조회 처리
 @router.get("/friends")
 def get_friend_list(

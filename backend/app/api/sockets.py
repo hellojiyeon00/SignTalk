@@ -26,6 +26,19 @@ async def connect(sid, environ):
     logger.info(f"✅ [Socket] 접속됨 | SID: {sid}")
 
 
+@sio.on("register_user")
+async def handle_register_user(sid, data):
+    """사용자 개인 알림 방 등록
+    
+    각 사용자를 자신의 user_id를 이름으로 하는 방에 join시켜
+    개인 알림을 받을 수 있게 함
+    """
+    user_id = data.get("user_id")
+    if user_id:
+        await sio.enter_room(sid, f"user_{user_id}")
+        logger.info(f"🔔 [알림 등록] {user_id} -> user_{user_id}")
+
+
 @sio.on("join_room")
 async def handle_join_room(sid, data):
     """채팅방 입장"""
@@ -46,6 +59,32 @@ async def handle_leave_room(sid, data):
     if room:
         await sio.leave_room(sid, room)
         logger.info(f"👋 [퇴장] {username} <- {room}")
+
+
+def get_receiver_id(room_id: int, sender_id: str):
+    """채팅방의 상대방 user_id 조회 (동기 함수)
+    
+    Returns:
+        str: 수신자 user_id
+    """
+    db = SessionLocal()
+    try:
+        # room_id로부터 두 참여자 조회
+        query = text("""
+            SELECT DISTINCT m.member_id
+            FROM multicampus_schema.talk t
+            JOIN multicampus_schema.member m ON t.member_no = m.member_no
+            WHERE t.talk_room_id = :room_id
+            AND m.member_id != :sender_id
+            LIMIT 1
+        """)
+        result = db.execute(query, {"room_id": room_id, "sender_id": sender_id}).fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        logger.error(f"❌ [DB 에러] 수신자 조회 실패: {e}")
+        return None
+    finally:
+        db.close()
 
 
 def save_message_sync(room_id: int, sender_id: str, msg: str):
@@ -99,6 +138,7 @@ async def handle_send_message(sid, data):
     
     1. DB에 메시지 저장
     2. 같은 방에 있는 모든 클라이언트에게 브로드캐스트
+    3. 상대방의 개인 알림 방으로도 알림 전송
     """
     room_id = data.get("room_id")
     room_name = data.get("room")
@@ -123,7 +163,18 @@ async def handle_send_message(sid, data):
                     "time": now_kst
                 }
                 
+                # 1. 같은 방에 있는 사용자들에게 메시지 전송
                 await sio.emit("receive_message", payload, room=room_name)
+                
+                # 2. 상대방에게 읽지 않은 메시지 알림 전송
+                receiver_id = await run_in_threadpool(get_receiver_id, room_id, sender_id)
+                if receiver_id:
+                    await sio.emit("unread_notification", {
+                        "sender_id": sender_id,
+                        "sender_name": sender_name,
+                        "room_id": room_id
+                    }, room=f"user_{receiver_id}")
+                    logger.info(f"🔔 [알림 전송] {sender_id} -> user_{receiver_id}")
                 
         except Exception as e:
             logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
@@ -139,6 +190,7 @@ async def handle_send_landmarks(sid, data):
     
     1. DB에 메시지 저장
     2. 같은 방에 있는 모든 클라이언트에게 브로드캐스트
+    3. 상대방의 개인 알림 방으로도 알림 전송
     """
     room_id = data.get("room_id")
     room_name = data.get("room")
@@ -163,7 +215,18 @@ async def handle_send_landmarks(sid, data):
                     "time": now_kst
                 }
                 
+                # 1. 같은 방에 있는 사용자들에게 메시지 전송
                 await sio.emit("receive_message", payload, room=room_name)
+                
+                # 2. 상대방에게 읽지 않은 메시지 알림 전송
+                receiver_id = await run_in_threadpool(get_receiver_id, room_id, sender_id)
+                if receiver_id:
+                    await sio.emit("unread_notification", {
+                        "sender_id": sender_id,
+                        "sender_name": sender_name,
+                        "room_id": room_id
+                    }, room=f"user_{receiver_id}")
+                    logger.info(f"🔔 [알림 전송] {sender_id} -> user_{receiver_id}")
                 
         except Exception as e:
             logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
