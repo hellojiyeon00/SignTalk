@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     DB_PORT: str
     DB_NAME: str
     
+    # Redis 설정
+    REDIS_PASSWORD: str
+    REDIS_HOST: str
+    REDIS_PORT: str
+
     # JWT 설정
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
@@ -24,6 +29,11 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         """SQLAlchemy 데이터베이스 연결 URL 생성"""
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    @property
+    def REDIS_URL(self) -> str:
+        """Redis 연결 URL 생성"""
+        return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}"
 
     # .env 파일 경로 계산 (backend/app/core -> project root)
     _current_file = os.path.abspath(__file__)
