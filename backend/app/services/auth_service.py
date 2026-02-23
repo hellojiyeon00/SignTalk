@@ -127,49 +127,38 @@ class AuthService:
         
         # 회원정보를 업데이트하는 SQL 작성
         try:
-            # 비밀번호 변경 포함 여부에 따라 SQL 분기
+            # 업데이트할 필드 동적 구성
+            update_fields = []
+            params = {"id": update_data.user_id}
+            
+            if update_data.user_name:
+                update_fields.append("full_name = :name")
+                params["name"] = update_data.user_name
+            
+            if update_data.phone_number:
+                update_fields.append("mobile_phone = :phone")
+                params["phone"] = update_data.phone_number
+            
             if update_data.password:
-                update_sql = text("""
+                update_fields.append("passwd = crypt(:pw, gen_salt('bf'))")
+                params["pw"] = update_data.password
+            
+            # 업데이트할 필드가 있을 경우에만 실행
+            if update_fields:
+                update_fields.append("update_date = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'")
+                update_fields.append("update_user = :id")
+                
+                update_sql = text(f"""
                     UPDATE multicampus_schema.member
-                    SET full_name = :name,
-                        mobile_phone = :phone,
-                        passwd = crypt(:pw, gen_salt('bf')),
-                        update_date = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul',
-                        update_user = :id
+                    SET {', '.join(update_fields)}
                     WHERE member_id = :id
                 """)
                 
-                # 빈칸(:name, :phone, :pw 등)에 실제 값 전달
-                params = {
-                    "name": update_data.user_name, 
-                    "phone": update_data.phone_number, 
-                    "pw": update_data.password, 
-                    "id": update_data.user_id
-                }
-            
-            # 비밀번호 변경이 없으면 패스워드 업데이트 부분 제외
-            else:
-                update_sql = text("""
-                    UPDATE multicampus_schema.member
-                    SET full_name = :name,
-                        mobile_phone = :phone,
-                        update_date = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul',
-                        update_user = :id
-                    WHERE member_id = :id
-                """)
+                # DB에 회원 정보 업데이트
+                db.execute(update_sql, params)
                 
-                # 빈칸(:name, :phone 등)에 실제 값 전달
-                params = {
-                    "name": update_data.user_name, 
-                    "phone": update_data.phone_number, 
-                    "id": update_data.user_id
-                }
-
-            # DB에 회원 정보 업데이트
-            db.execute(update_sql, params)
-            
-            # 업데이트 완료 후 커밋
-            db.commit()
+                # 업데이트 완료 후 커밋
+                db.commit()
         except Exception as e:
             # 업데이트 실패 시 롤백하여 DB 상태 원복 (DB 꼬임 방지)
             db.rollback()

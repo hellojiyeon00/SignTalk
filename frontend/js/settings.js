@@ -459,6 +459,41 @@ function refreshLocation() {
     getCurrentLocation();
 }
 
+function parseLocationString(locationStr) {
+    /**
+     * 주소 문자열에서 시/도, 구/군 정보 추출
+     * @param {string} locationStr - 입력한 주소 (예: "서울특별시 강남구", "경기도 성남시 분당구")
+     * @returns {object} - {city: "시/도", district: "구/군/시"}
+     */
+    
+    // 시/도 패턴: 특별시, 광역시, 도, 특별자치시, 특별자치도
+    const cityPattern = /(서울특별시|부산광역시|대구광역시|인천광역시|광주광역시|대전광역시|울산광역시|세종특별자치시|경기도|강원특별자치도|강원도|충청북도|충청남도|전라북도|전북특별자치도|전라남도|경상북도|경상남도|제주특별자치도)/;
+    
+    // 구/군/시 패턴: ~구, ~군, ~시 (단, "특별시", "광역시"는 제외)
+    const districtPattern = /([가-힣]+(?:구|군|시))(?!별|역)/;
+    
+    const result = {
+        city: null,
+        district: null
+    };
+    
+    // 시/도 추출
+    const cityMatch = locationStr.match(cityPattern);
+    if (cityMatch) {
+        result.city = cityMatch[1];
+        
+        // 시/도 이후 부분에서 구/군/시 추출
+        const afterCity = locationStr.substring(cityMatch.index + cityMatch[1].length);
+        const districtMatch = afterCity.match(districtPattern);
+        
+        if (districtMatch) {
+            result.district = districtMatch[1];
+        }
+    }
+    
+    return result;
+}
+
 function saveManualLocation() {
     /* 수동 입력한 위치 저장 */
     const location = document.getElementById("manualLocation").value.trim();
@@ -468,14 +503,41 @@ function saveManualLocation() {
         return;
     }
     
+    // 주소에서 시/도, 구/군 정보 추출
+    const parsedLocation = parseLocationString(location);
+    
     // localStorage에 저장
     localStorage.setItem("userLocation", location);
     localStorage.setItem("gpsEnabled", "false");
+    
+    // 파싱된 지역 정보 저장 (재난문자 필터링용)
+    if (parsedLocation.city) {
+        localStorage.setItem("userRegion1", parsedLocation.city);
+        console.log(`   시/도: ${parsedLocation.city}`);
+    } else {
+        localStorage.removeItem("userRegion1");
+        console.warn("⚠️ 시/도 정보를 추출하지 못했습니다.");
+    }
+    
+    if (parsedLocation.district) {
+        localStorage.setItem("userRegion2", parsedLocation.district);
+        console.log(`   구/군: ${parsedLocation.district}`);
+    } else {
+        localStorage.removeItem("userRegion2");
+    }
     
     // 저장된 위치 정보 표시
     document.getElementById("savedLocationInfo").style.display = "block";
     document.getElementById("savedLocationText").textContent = location;
     
-    alert("위치가 저장되었습니다.");
-    console.log("✅ 수동 위치 저장:", location);
+    // 사용자 피드백
+    if (parsedLocation.city) {
+        alert(`위치가 저장되었습니다.\n📍 ${parsedLocation.city} ${parsedLocation.district || ''}`);
+        console.log("✅ 수동 위치 저장:", location);
+        console.log(`   재난 필터링 활성화: ${parsedLocation.city} ${parsedLocation.district || ''}`);
+    } else {
+        alert("위치가 저장되었으나 시/도 정보를 인식하지 못했습니다.\n재난 필터링이 작동하지 않을 수 있습니다.");
+        console.log("⚠️ 수동 위치 저장 (필터링 불가):", location);
+    }
 }
+

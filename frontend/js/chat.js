@@ -645,6 +645,53 @@ let disasterEventSource = null;
 let latestDisasterType = null; // 가장 최근 재난문자 등급 저장
 let unreadDisasterCount = 0; // 읽지 않은 재난문자 개수
 
+/**
+ * 재난문자 지역 필터링 체크
+ * @param {string} disasterRegion - 재난문자 발생 지역 (예: "서울특별시 강남구")
+ * @returns {boolean} - true: 수신, false: 필터링
+ */
+function shouldReceiveDisaster(disasterRegion) {
+    // 재난 지역 정보가 없으면 모든 사용자에게 전송 (전국 재난)
+    if (!disasterRegion) {
+        console.log("📍 [필터링] 전국 재난 → 모든 사용자 수신");
+        return true;
+    }
+    
+    // localStorage에서 사용자 위치 정보 가져오기
+    const userCity = localStorage.getItem("userRegion1"); // 시/도 (예: "서울특별시")
+    const userDistrict = localStorage.getItem("userRegion2"); // 구/군 (예: "강남구")
+    const gpsEnabled = localStorage.getItem("gpsEnabled"); // GPS 사용 여부
+    
+    // 위치 설정이 안되어 있으면 모든 재난문자 수신
+    if (!userCity) {
+        console.log("📍 [필터링] 위치 미설정 → 모든 재난 수신");
+        return true;
+    }
+    
+    // 위치 설정 방식 로그
+    const locationSource = gpsEnabled === "true" ? "GPS" : "수동입력";
+    console.log(`📍 [필터링] 내 위치 (${locationSource}): ${userCity} ${userDistrict || ''}`);
+    
+    // 대소문자 구분 없이 비교
+    const regionLower = disasterRegion.toLowerCase();
+    const cityLower = userCity.toLowerCase();
+    const districtLower = userDistrict ? userDistrict.toLowerCase() : "";
+    
+    // 시/도 매칭 확인
+    if (regionLower.includes(cityLower)) {
+        // 구/군 정보가 있으면 구/군도 확인
+        if (districtLower && !regionLower.includes(districtLower)) {
+            console.log(`🔇 [필터링] ❌ 구/군 불일치 → 재난: ${disasterRegion} / 내위치: ${userCity} ${userDistrict}`);
+            return false;
+        }
+        console.log(`✅ [필터링] ✔️ 지역 일치 → ${disasterRegion} 재난문자 수신`);
+        return true;
+    }
+    
+    console.log(`🔇 [필터링] ❌ 시/도 불일치 → 재난: ${disasterRegion} / 내위치: ${userCity} ${userDistrict || ''}`);
+    return false;
+}
+
 function connectDisasterSSE() {
     /* SSE 연결로 재난문자 수신 */
     if (disasterEventSource) {
@@ -658,6 +705,11 @@ function connectDisasterSSE() {
     disasterEventSource.addEventListener('disaster', (event) => {
         const data = JSON.parse(event.data);
         console.log("🚨 [SSE] 재난문자 수신:", data);
+        
+        // 📍 지역 필터링 체크
+        if (!shouldReceiveDisaster(data.region)) {
+            return; // 필터링: 처리 중단
+        }
         
         // 최신 재난문자 등급 저장 및 개수 증가
         latestDisasterType = data.type_code;
