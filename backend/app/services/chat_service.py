@@ -111,47 +111,70 @@ class ChatService:
         """내 채팅방 목록 조회
         
         삭제되지 않은 친구만 표시 (delete_date IS NULL)
+        읽지 않은 메시지 개수와 마지막 메시지 시간 포함
         
         Returns:
-            list: [{"user_id", "user_name"}, ...]
+            list: [{"user_id", "user_name", "unread_count", "last_message_time"}, ...]
         """
         # 내 회원 번호 조회
         my_no_sql = text("SELECT member_no FROM multicampus_schema.member WHERE member_id = :id")
         my_no = db.execute(my_no_sql, {"id": user_id}).scalar()
 
-        # SQL: 내 채팅방 목록 조회 (본인 제외, delete_date IS NULL)
+        # SQL: 내 채팅방 목록 조회 + 읽지 않은 메시지 개수 + 마지막 메시지 시간
         chat_list_sql = text("""
-            SELECT A1.member_no1 AS member_no,
-                   (SELECT CC1.member_id FROM multicampus_schema.member CC1 WHERE A1.member_no1 = CC1.member_no) AS member_id,
-                   (SELECT CC1.full_name FROM multicampus_schema.member CC1 WHERE A1.member_no1 = CC1.member_no) AS full_name
-            FROM (
-                SELECT BB1.member_no1, BB1.member_no2
-                FROM multicampus_schema.member AA1, multicampus_schema.talk_room BB1
-                WHERE AA1.member_no = :my_no 
-                  AND (AA1.member_no = BB1.member_no1 OR AA1.member_no = BB1.member_no2)
-                  AND BB1.delete_date IS NULL
-            ) A1
-            WHERE A1.member_no1 != :my_no
-            UNION
-            SELECT A2.member_no2 AS member_no,
-                   (SELECT CC2.member_id FROM multicampus_schema.member CC2 WHERE A2.member_no2 = CC2.member_no) AS member_id,
-                   (SELECT CC2.full_name FROM multicampus_schema.member CC2 WHERE A2.member_no2 = CC2.member_no) AS full_name
-            FROM (
-                SELECT BB2.member_no1, BB2.member_no2
-                FROM multicampus_schema.member AA2, multicampus_schema.talk_room BB2
-                WHERE AA2.member_no = :my_no 
-                  AND (AA2.member_no = BB2.member_no1 OR AA2.member_no = BB2.member_no2)
-                  AND BB2.delete_date IS NULL
-            ) A2
-            WHERE A2.member_no2 != :my_no
+            WITH chat_partners AS (
+                SELECT A1.member_no1 AS member_no,
+                       A1.talk_room_id
+                FROM (
+                    SELECT BB1.talk_room_id, BB1.member_no1, BB1.member_no2
+                    FROM multicampus_schema.member AA1, multicampus_schema.talk_room BB1
+                    WHERE AA1.member_no = :my_no 
+                      AND (AA1.member_no = BB1.member_no1 OR AA1.member_no = BB1.member_no2)
+                      AND BB1.delete_date IS NULL
+                ) A1
+                WHERE A1.member_no1 != :my_no
+                UNION
+                SELECT A2.member_no2 AS member_no,
+                       A2.talk_room_id
+                FROM (
+                    SELECT BB2.talk_room_id, BB2.member_no1, BB2.member_no2
+                    FROM multicampus_schema.member AA2, multicampus_schema.talk_room BB2
+                    WHERE AA2.member_no = :my_no 
+                      AND (AA2.member_no = BB2.member_no1 OR AA2.member_no = BB2.member_no2)
+                      AND BB2.delete_date IS NULL
+                ) A2
+                WHERE A2.member_no2 != :my_no
+            )
+            SELECT 
+                M.member_id,
+                M.full_name,
+                COALESCE(
+                    (SELECT COUNT(*) 
+                     FROM multicampus_schema.talk T
+                     WHERE T.talk_room_id = CP.talk_room_id
+                       AND T.member_no = CP.member_no
+                       AND T.confirm_yn = 'N'), 
+                    0
+                ) AS unread_count,
+                (SELECT MAX(T2.talk_date)
+                 FROM multicampus_schema.talk T2
+                 WHERE T2.talk_room_id = CP.talk_room_id) AS last_message_time
+            FROM chat_partners CP
+            JOIN multicampus_schema.member M ON CP.member_no = M.member_no
+            ORDER BY last_message_time DESC NULLS LAST
         """)
         
         # SQL 실행 후 결과 반환
         results = db.execute(chat_list_sql, {"my_no": my_no}).fetchall()
         
-        # 결과를 리스트로 변환하여 반환(row[0]: member_no, row[1]: member_id, row[2]: full_name)
+        # 결과를 리스트로 변환하여 반환
         return [
-            {"user_id": row[1], "user_name": row[2]} 
+            {
+                "user_id": row[0], 
+                "user_name": row[1],
+                "unread_count": row[2],
+                "last_message_time": row[3].isoformat() if row[3] else None
+            } 
             for row in results
         ]
 
@@ -272,6 +295,54 @@ class ChatService:
                 "is_blocked": row[2]
             } for row in results
         ]
+
+    @staticmethod
+    def mark_messages_as_read(db: Session, room_id: int, user_id: str):
+        """채팅방 메시지 읽음 처리
+        
+        특정 채팅방에서 상대방이 보낸 읽지 않은 메시지를 모두 읽음 처리
+        
+        Args:
+            room_id: 채팅방 ID
+            user_id: 현재 사용자 ID (메시지를 읽는 사람)
+            
+        Returns:
+            dict: {"message": str, "marked_count": int}
+        """
+        # 내 회원 번호 조회
+        my_no_sql = text("SELECT member_no FROM multicampus_schema.member WHERE member_id = :id")
+        my_no = db.execute(my_no_sql, {"id": user_id}).scalar()
+        
+        if not my_no:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+        
+        try:
+            # SQL: 상대방이 보낸 읽지 않은 메시지를 읽음 처리
+            mark_read_sql = text("""
+                UPDATE multicampus_schema.talk
+                SET confirm_yn = 'Y',
+                    update_user = :updater,
+                    update_date = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
+                WHERE talk_room_id = :room_id
+                  AND member_no != :my_no
+                  AND confirm_yn = 'N'
+            """)
+            
+            result = db.execute(mark_read_sql, {
+                "room_id": room_id,
+                "my_no": my_no,
+                "updater": user_id
+            })
+            db.commit()
+            
+            marked_count = result.rowcount
+            return {
+                "message": f"{marked_count}개의 메시지를 읽음 처리했습니다.",
+                "marked_count": marked_count
+            }
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"메시지 읽음 처리 실패: {str(e)}")
 
     @staticmethod
     def unblock_friend(db: Session, my_id: str, friend_id: str):

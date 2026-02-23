@@ -12,7 +12,10 @@ class Talk(Base):
     talk_date = Column(TIMESTAMP(timezone=False), primary_key=True, nullable=False) # 언제 보냈는지 
     
     # 대화 내용
-    message = Column(String, nullable=False) # 실제 채팅 텍스트 내용 
+    message = Column(String, nullable=False) # 실제 채팅 텍스트 내용
+    
+    # 읽은 메시지 여부 (confirm_yn bpchar(1) DEFAULT 'N'::bpchar NOT NULL)
+    confirm_yn = Column(String(1), nullable=False, server_default='N')
     
     # 메타 정보 (생성/수정/삭제 이력)
     create_user = Column(String(50), nullable=False) # 데이터를 처음 넣은 사람 

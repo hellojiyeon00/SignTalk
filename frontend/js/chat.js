@@ -12,6 +12,13 @@ let currentRoomName = null;  // 소켓 방 이름 (user1_user2)
 
 const socket = io(BASE_URL);
 
+// 개인 알림 방 등록 (소켓 연결 후 자동 실행)
+socket.on("connect", () => {
+    console.log("✅ [Socket] 연결됨");
+    socket.emit("register_user", { user_id: myId });
+    console.log("🔔 [알림] 개인 알림 방 등록:", myId);
+});
+
 // ======== 초기화 ========
 document.addEventListener("DOMContentLoaded", () => {
     if (!myId) {
@@ -121,6 +128,16 @@ socket.on("receive_message", (data) => {
         });
         displayMessage(data.sender, data.sender_name, data.message, timeStr);
     }
+    
+    // 친구 목록 새로고침 (읽지 않은 메시지 개수와 순서 업데이트)
+    fetchMyFriends();
+});
+
+// 읽지 않은 메시지 알림 (다른 채팅방에서 메시지가 와도 알림)
+socket.on("unread_notification", (data) => {
+    console.log("🔔 [Socket] 읽지 않은 메시지 알림:", data);
+    // 친구 목록 새로고침 (새 메시지가 온 친구가 목록 맨 위로)
+    fetchMyFriends();
 });
 
 // ======== API 함수 ========
@@ -144,10 +161,17 @@ async function fetchMyFriends() {
         friends.forEach(user => {
             const itemDiv = document.createElement("div");
             itemDiv.className = "friend-item";
+            
+            // 읽지 않은 메시지 배지
+            const unreadBadge = user.unread_count > 0 
+                ? `<span style="background:#ff4444; color:white; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:bold; margin-left:5px;">${user.unread_count}</span>` 
+                : '';
+            
             itemDiv.innerHTML = `
                 <div style="font-weight:500;">
                     ${user.user_name} 
                     <span style="font-size:12px; color:#888;">(${user.user_id})</span>
+                    ${unreadBadge}
                 </div>`;
             itemDiv.onclick = () => startChat(user, itemDiv);
             listContainer.appendChild(itemDiv);
@@ -386,6 +410,18 @@ async function startChat(friend, clickedElement) {
         });
         const roomData = await roomRes.json();
         currentRoomId = roomData.room_id;
+        
+        // 메시지 읽음 처리
+        try {
+            await fetch(`${BASE_URL}/chat/read?room_id=${currentRoomId}&user_id=${myId}`, {
+                method: "POST"
+            });
+            console.log("✅ 메시지 읽음 처리 완료");
+            // 친구 목록 새로고침 (읽지 않은 메시지 개수 업데이트)
+            fetchMyFriends();
+        } catch (readError) {
+            console.error("❌ 읽음 처리 실패:", readError);
+        }
 
         // 소켓 방 이름 생성
         const participants = [myId, friend.user_id].sort();
