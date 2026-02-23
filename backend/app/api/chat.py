@@ -41,9 +41,9 @@ def get_my_rooms(user_id: str, db: Session = Depends(get_db)):
 
 # @router.get("/history/{room_id}"): GET 요청으로 특정 채팅방의 대화 내역 조회 처리
 @router.get("/history/{room_id}")
-def get_chat_history(room_id: int, db: Session = Depends(get_db)):
-    """채팅방 대화 내역 조회"""
-    return ChatService.get_chat_history(db, room_id)
+def get_chat_history(room_id: int, user_id: str, db: Session = Depends(get_db)):
+    """채팅방 대화 내역 조회 (읽음 상태 포함)"""
+    return ChatService.get_chat_history(db, room_id, user_id)
 
 
 # @router.post("/friend/block"): POST 요청으로 친구 차단 처리

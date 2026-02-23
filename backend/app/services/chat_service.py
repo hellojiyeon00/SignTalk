@@ -179,16 +179,20 @@ class ChatService:
         ]
 
     @staticmethod
-    def get_chat_history(db: Session, room_id: int):
+    def get_chat_history(db: Session, room_id: int, user_id: str):
         """채팅방 대화 내역 조회
         
+        Args:
+            room_id: 채팅방 ID
+            user_id: 현재 사용자 ID (읽음 상태 판단용)
+        
         Returns:
-            list: [{"message", "sender", "sender_name", "date"}, ...]
+            list: [{"message", "sender", "sender_name", "date", "is_read"}, ...]
         """
         
-        # SQL: 채팅방 대화 내역 조회 (talk 테이블과 member 테이블 JOIN, talk_room_id로 필터링, 날짜 오름차순 정렬)
+        # SQL: 채팅방 대화 내역 조회 (confirm_yn 포함)
         history_sql = text("""
-            SELECT T.message, M.member_id, M.full_name, T.talk_date
+            SELECT T.message, M.member_id, M.full_name, T.talk_date, T.confirm_yn
             FROM multicampus_schema.talk T
             JOIN multicampus_schema.member M ON T.member_no = M.member_no
             WHERE T.talk_room_id = :r_id
@@ -204,7 +208,10 @@ class ChatService:
                 "message": row[0], 
                 "sender": row[1],
                 "sender_name": row[2],
-                "date": row[3].strftime("%H:%M")
+                "date": row[3].strftime("%H:%M"),
+                # 모든 메시지는 confirm_yn으로 읽음 여부 판단
+                # 'Y'이면 읽음, 'N'이면 읽지 않음
+                "is_read": row[4] == 'Y'
             } for row in results
         ]
 

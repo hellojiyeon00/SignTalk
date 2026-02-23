@@ -48,6 +48,10 @@ async def handle_join_room(sid, data):
     if room and username:
         await sio.enter_room(sid, room)
         logger.info(f"🚪 [입장] {username} -> {room}")
+        
+        # 채팅방 입장 시 상대방에게 읽음 처리 알림 전송
+        await sio.emit("messages_read", {"reader": username}, room=room)
+        logger.info(f"✅ [읽음 처리] {username}이(가) {room} 메시지 읽음")
 
 
 @sio.on("leave_room")
@@ -59,6 +63,18 @@ async def handle_leave_room(sid, data):
     if room:
         await sio.leave_room(sid, room)
         logger.info(f"👋 [퇴장] {username} <- {room}")
+
+
+@sio.on("notify_read")
+async def handle_notify_read(sid, data):
+    """메시지 읽음 알림 (상대방이 메시지를 읽었을 때)"""
+    room = data.get("room")
+    reader = data.get("reader")
+    
+    if room and reader:
+        # 같은 방에 있는 사람들에게 읽음 처리 알림
+        await sio.emit("messages_read", {"reader": reader}, room=room)
+        logger.info(f"✅ [실시간 읽음] {reader}이(가) {room} 메시지 읽음 알림 전송")
 
 
 def get_receiver_id(room_id: int, sender_id: str):
