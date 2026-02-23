@@ -5,13 +5,33 @@ Socket.IO를 지원하는 채팅 서버 설정
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
+from app.core.redis_client import get_redis, close_redis
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.sockets import sio
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 시작 시
+    redis = await get_redis()  # Redis 연결
+    # 연결 확인
+    try:
+        await redis.ping()
+        print("✅ Redis 연결됨")
+    except Exception as e:
+        print(f"❌ Redis 연결 실패: {e}")
+        raise
+
+    yield
+
+    # 종료 시
+    await close_redis()
+    print("✅ Redis 연결 종료")
+
 # FastAPI 앱 생성
-app = FastAPI(title="Chat API", version="1.0.0")
+app = FastAPI(title="Chat API", version="1.0.0", lifespan=lifespan)
 
 # CORS 설정 - 개발 환경용 (프로덕션에서는 특정 origin만 허용)
 app.add_middleware(
