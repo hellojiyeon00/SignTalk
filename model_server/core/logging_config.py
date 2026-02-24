@@ -4,7 +4,7 @@ logging_config.py
 model_server 공통 로깅 설정
 - 콘솔 + 파일 동시 출력
 - RotatingFileHandler로 파일 용량 제한 + 백업
-- 모듀별 logger = logging.getLogger(__name__) 사용
+- 모듈별 logger = logging.getLogger(__name__) 사용
 """
 
 from __future__ import annotations
