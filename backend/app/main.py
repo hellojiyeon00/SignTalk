@@ -6,6 +6,7 @@ import asyncio
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
@@ -31,6 +32,9 @@ app.include_router(chat_router, prefix="/chat", tags=["채팅"]) # 채팅 관련
 app.include_router(disaster_router, prefix="/disaster", tags=["재난문자"]) # 재난문자 관련 API는 /disaster 경로로 접근
 app.include_router(location_router, prefix="/location", tags=["위치"]) # 위치 관련 API는 /location 경로로 접근
 
+# 재난 이미지 정적 파일 서빙
+app.mount("/images", StaticFiles(directory="../image"), name="images")
+
 # 서버 시작 시 실행할 초기화 작업 (비동기)
 @app.on_event("startup") 
 async def startup_event():
@@ -39,3 +43,5 @@ async def startup_event():
 
 # Socket.IO 통합 - app과 sio를 연결하여 Socket.IO 서버로 FastAPI 앱을 감쌈
 app = socketio.ASGIApp(sio, app)
+
+

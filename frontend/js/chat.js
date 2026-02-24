@@ -721,11 +721,11 @@ function connectDisasterSSE() {
         latestDisasterType = data.type_code;
         unreadDisasterCount++;
         
-        // 1) 우측 하단에 팝업(Toast) 띄우기 (등급 정보 포함)
-        showToast(data.message, data.type_code, data.type_name);
+        // 1) 우측 하단에 팝업(Toast) 띄우기 (등급 정보 + 이미지 포함)
+        showToast(data.message, data.type_code, data.type_name, data.disaster_type);
         
-        // 2) 재난문자 전용 모달창에도 내용 추가하기 (등급 정보 포함)
-        addDisasterMessageToRoom(data.message, data.time, data.type_code, data.type_name);
+        // 2) 재난문자 전용 모달창에도 내용 추가하기 (등급 정보 + 이미지 포함)
+        addDisasterMessageToRoom(data.message, data.time, data.type_code, data.type_name, data.disaster_type);
         
         // 3) 브라우저 알림 표시 (등급에 따른 제목)
         const alertTitle = getDisasterTitle(data.type_code, data.type_name);
@@ -846,6 +846,33 @@ function getDisasterConfig(typeCode) {
     return configs[typeCode] || configs['EM'];
 }
 
+// ---------------------------------------------------------
+// [신규] 3-1-1. 재난 유형별 이미지 가져오기
+// ---------------------------------------------------------
+function getDisasterImage(disasterType) {
+    /* 재난 유형에 따른 이미지 경로 반환 */
+    const imageMap = {
+        '초미세먼지': `${BASE_URL}/images/ultra_fine_microdust.png`,
+        '미세먼지': `${BASE_URL}/images/ultra_fine_microdust.png`,
+        '한파': `${BASE_URL}/images/bitter_cold.png`,
+        '폭염': `${BASE_URL}/images/heat_wave.png`,
+        '산불': `${BASE_URL}/images/forest_fire.png`,
+        '악천후': `${BASE_URL}/images/bad_weather.png`,
+        '열대야': `${BASE_URL}/images/tropical_night.png`,
+        '전염병': `${BASE_URL}/images/infectious_disease.png`,
+        '지진': `${BASE_URL}/images/earthquake.png`,
+        '태풍': `${BASE_URL}/images/typhoon.png`,
+        '지진해일': `${BASE_URL}/images/tsunami.png`,
+        '홍수': `${BASE_URL}/images/deluge_flood.png`,
+        '화재': `${BASE_URL}/images/fire.png`,
+        '민방공': `${BASE_URL}/images/war.png`,
+        '기타': `${BASE_URL}/images/etc_disaster.png`
+    };
+    
+    // 등록되지 않은 유형은 기타로 처리
+    return imageMap[disasterType] || imageMap['기타'];
+}
+
 function getDisasterTitle(typeCode, typeName) {
     /* 재난문자 등급별 제목 생성 */
     const config = getDisasterConfig(typeCode);
@@ -855,7 +882,7 @@ function getDisasterTitle(typeCode, typeName) {
 // ---------------------------------------------------------
 // [신규] 4. 우측 하단 팝업(Toast) 그리기 함수
 // ---------------------------------------------------------
-function showToast(message, typeCode = 'EM', typeName = null) {
+function showToast(message, typeCode = 'EM', typeName = null, disasterType = null) {
     const container = document.getElementById("toastContainer");
     const config = getDisasterConfig(typeCode);
     
@@ -875,9 +902,17 @@ function showToast(message, typeCode = 'EM', typeName = null) {
         ? `<button onclick="this.parentElement.remove()" style="position:absolute; top:5px; right:5px; background:none; border:none; color:${config.color}; font-size:16px; cursor:pointer; padding:0; width:20px; height:20px;">✕</button>`
         : '';
     
+    // 긴급/위급 재난은 이미지 표시
+    let imageHtml = '';
+    if ((typeCode === 'EX' || typeCode === 'EM' || typeCode === 'SA') && disasterType) {
+        const imagePath = getDisasterImage(disasterType);
+        imageHtml = `<img src="${imagePath}" alt="${disasterType}" style="width:100%; max-width:200px; height:auto; border-radius:8px; margin-bottom:10px; display:block;">`;
+    }
+    
     toast.innerHTML = `
         ${closeButton}
         <strong style="color:${config.color};">${config.icon} ${displayTitle}</strong><br>
+        ${imageHtml}
         <span style="font-size: 13px; color: #333;">${shortMessage}</span>
     `;
     
@@ -949,7 +984,7 @@ function closeDisasterRoom() {
     document.getElementById("disasterModal").style.display = "none";
 }
 
-function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null) {
+function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, disasterType = null) {
     const msgBox = document.getElementById("disasterMessages");
     const config = getDisasterConfig(typeCode);
     
@@ -969,12 +1004,23 @@ function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null) {
         border-radius: 4px;
     `;
     
+    // 긴급/위급/안전안내 재난은 이미지 표시
+    let imageHtml = '';
+    if ((typeCode === 'EX' || typeCode === 'EM' || typeCode === 'SA') && disasterType) {
+        const imagePath = getDisasterImage(disasterType);
+        console.log(`🖼️ [모달 이미지] 재난 유형: ${disasterType}, 경로: ${imagePath}`);
+        imageHtml = `<img src="${imagePath}" alt="${disasterType}" style="width:100%; max-width:300px; height:auto; border-radius:8px; margin-bottom:10px; display:block;" onerror="console.error('모달 이미지 로드 실패:', '${imagePath}'); this.style.display='none';">`;
+    } else {
+        console.log(`ℹ️ [모달 이미지] 표시 안 함 - 등급: ${typeCode}, 유형: ${disasterType}`);
+    }
+    
     const displayTitle = typeName || config.title;
     alertDiv.innerHTML = `
         <div style="font-size: 12px; font-weight: bold; color: ${config.color}; margin-bottom: 5px;">
             ${config.icon} ${displayTitle}
             <span style="font-weight: normal; color: #888; margin-left: 8px;">${time}</span>
         </div>
+        ${imageHtml}
         <div style="font-size: 14px; color: #333; line-height: 1.4;">${msg}</div>
     `;
     
