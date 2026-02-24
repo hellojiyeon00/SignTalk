@@ -65,7 +65,7 @@ function onResults(results) {
         room_id: currentRoomId,
         username: myId,
         message: landmarks,
-        stopBtn: false
+        status_stop: false
     });
 
     console.log(`📤 [Socket] 전송: ${landmarks}`);
@@ -143,7 +143,7 @@ stopBtn.addEventListener("click", () => {
         room_id: currentRoomId,
         username: myId,
         message: null,
-        stopBtn: true
+        status_stop: true
     });
 });
 
