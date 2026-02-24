@@ -31,9 +31,11 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Redis 연결 실패: {e}")
         raise
 
-    # HDFS 연결 및 확인
+    # HDFS
+    hdfs = await get_hdfs()  # HDFS 연결
+    # 연결 확인
     try:
-        hdfs = get_hdfs()
+        hdfs.content('/')
         logger.info("✅ HDFS 연결됨")
     except Exception as e:
         logger.error(f"❌ HDFS 연결 실패: {e}")

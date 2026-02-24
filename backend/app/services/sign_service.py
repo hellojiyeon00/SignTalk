@@ -34,6 +34,16 @@ async def push_frame(room_id, sender_id, landmarks):
     length = await redis.llen(key)
     print(f"[DEBUG] Redis key={key} 저장 완료. 현재 프레임 수: {length}")
 
+# ===== Redis 작업 =====
+async def get_frames(room_id, sender_id):
+    """Redis에 저장된 프레임 반환"""
+    redis = await get_redis()
+    key = frame_key(room_id, sender_id)
+
+    frames = await redis.lrange(key, 0, -1)
+
+    return [json.loads(f) for f in frames]
+
 async def clear_session(room_id, sender_id):
     """세션 정리"""
     redis = await get_redis()
@@ -85,6 +95,7 @@ async def call_sign2text(data):
                         "v_coordinates": all_landmarks # 저장할 전체 랜드마크 리스트
                     }
                 
+                    """
                     # 하둡 저장 API 호출
                     try:
                         async with httpx.AsyncClient() as client:
@@ -93,6 +104,7 @@ async def call_sign2text(data):
                                 logger.info(f"💾 [HDFS] 데이터 저장 완료: {h_resp.json().get('hdfs_path')}")
                     except Exception as e:
                         logger.error(f"❌ [HDFS] 저장 실패: {e}")
+                    """
 
                     # 세션 정리
                     await clear_session(room_id, sender_id)

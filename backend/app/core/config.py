@@ -45,10 +45,10 @@ class Settings(BaseSettings):
         """HDFS 연결 URL 생성"""
         return f"http://{self.HDFS_HOST}:{self.HDFS_PORT}"
 
-    # .env 파일 경로 계산 (backend/app/core -> project root)
+    # .env 파일 경로 계산 (backend/app/core -> backend)
     _current_file = os.path.abspath(__file__)
-    _project_root = os.path.dirname(os.path.dirname(os.path.dirname(_current_file)))
-    _env_file_path = os.path.join(_project_root, ".env")
+    _backend_root = os.path.dirname(os.path.dirname(os.path.dirname(_current_file)))
+    _env_file_path = os.path.join(_backend_root, ".env")
 
     model_config = SettingsConfigDict(
         env_file=_env_file_path,
