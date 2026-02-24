@@ -127,7 +127,10 @@
         <div class="modal-content">
             
             <div id="settingsMenu">
-                <h3>⚙️ 설정</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="margin:0;">⚙️ 설정</h3>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
+                </div>
                 <ul class="settings-list">
                     <li onclick="goToProfileEdit()">
                         <span>👤 회원 정보 수정 / 탈퇴</span>
@@ -164,9 +167,12 @@
             </div>
 
             <div id="settingsEditProfile" style="display:none;">
-                <div style="display:flex; align-items:center; margin-bottom:20px;">
-                    <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
-                    <h3 style="margin:0;">내 정보 수정</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center;">
+                        <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
+                        <h3 style="margin:0;">내 정보 수정</h3>
+                    </div>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
                 </div>
                 
                 <div class="input-group">
@@ -196,9 +202,12 @@
             </div>
 
             <div id="settingsFriendManage" style="display:none;">
-                <div style="display:flex; align-items:center; margin-bottom:20px;">
-                    <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
-                    <h3 style="margin:0;">친구 목록 관리</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center;">
+                        <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
+                        <h3 style="margin:0;">친구 목록 관리</h3>
+                    </div>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
                 </div>
                 
                 <div id="friendManageList" style="max-height:400px; overflow-y:auto;">
@@ -207,9 +216,12 @@
             </div>
 
             <div id="settingsLocationSettings" style="display:none;">
-                <div style="display:flex; align-items:center; margin-bottom:20px;">
-                    <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
-                    <h3 style="margin:0;">📍 위치 설정</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center;">
+                        <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
+                        <h3 style="margin:0;">📍 위치 설정</h3>
+                    </div>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
                 </div>
                 
                 <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin-bottom:20px;">
