@@ -1,165 +1,156 @@
 # backend/app/services/disaster_service.py
 
-from sqlalchemy import text
-from app.core.database import SessionLocal
 import logging
 import asyncio
-import psycopg2
+import json
 from datetime import datetime, timedelta, timezone
+from aiokafka import AIOKafkaConsumer # 비동기 Kafka 컨슈머 라이브러리 임포트
 
 from app.core.config import settings
 
-# 서버 로거 설정
-logger = logging.getLogger("     disaster_service")
+# 서버 터미널에 로그를 예쁘게 찍기 위한 설정입니다.
+logger = logging.getLogger("disaster_service")
 
-# 전역 재난문자 큐 (PostgreSQL NOTIFY 리스너가 채움)
+# aiokafka의 상세 로그 숨기기 (에러만 표시)
+logging.getLogger("aiokafka").setLevel(logging.WARNING)
+
+# FastAPI 백그라운드와 사용자 프론트엔드(SSE) 사이에서 데이터를 임시 보관할 비동기 큐(대기열)입니다.
 disaster_queue = asyncio.Queue()
 
-
-# 재난문자 관련 비즈니스 로직을 처리하는 클래스
 class DisasterService:
-    
-    # @staticmethod: 정적 메서드로 정의하여 인스턴스 생성 없이 호출 가능
-    @staticmethod
-    def get_disaster_message(character_id: int):
-        """
-        트리거가 알려준 ID를 기반으로 재난문자의 상세 내용을 DB에서 가져옵니다.
-        
-        Returns:
-            dict: {"id", "message", "type_code", "type_name", "region"}
-        """
-        # DB 세션 생성
-        db = SessionLocal()
-        try:
-            # SQL: 재난문자 상세 조회 (character_id로 조회, 등급 및 지역 포함)
-            sql = text("""
-                SELECT character_id, character_content, character_type_code, 
-                       disaster_emrg_step_nm, disaster_rcptn_rgn_nm
-                FROM multicampus_schema.characters 
-                WHERE character_id = :id
-            """)
-            
-            # SQL 실행 및 결과 가져오기
-            result = db.execute(sql, {"id": character_id}).fetchone()
-            
-            # result[0]=id, [1]=message, [2]=type_code, [3]=emrg_step_nm, [4]=rcptn_rgn_nm
-            if result:
-                return {
-                    "id": result[0], 
-                    "message": result[1],
-                    "type_code": result[2],  # EX(위급), EM(긴급), SA(안전안내)
-                    "type_name": result[3] or result[2],  # 긴급단계명 (없으면 코드 사용)
-                    "region": result[4]  # 수신 지역명
-                }
-            return None
-        
-        # 예외 처리 및 세션 종료
-        except Exception as e:
-            logger.error(f"❌ [DB 에러] 재난 문자 조회 실패: {e}")
-            return None
-        finally:
-            db.close()
     
     @staticmethod
     async def start_disaster_listener():
-        """PostgreSQL NOTIFY 리스너 시작
-        
-        백그라운드에서 PostgreSQL의 NOTIFY를 감지하고 
-        disaster_queue에 데이터를 추가합니다.
         """
-        try:
-            # DB 연결 (비동기 루프를 막지 않기 위해 자동 커밋 모드 사용)
-            conn = psycopg2.connect(settings.DATABASE_URL)
-            # 자동 커밋 모드 설정 (NOTIFY 수신을 위해 필요)
-            conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-            curs = conn.cursor()
-            
-            # DB에 NOTIFY 수신 대기 설정 (characters 테이블의 INSERT 이벤트를 감지)
-            curs.execute('LISTEN "characters_INSERT";')
-            logger.info("📡 재난 문자 PostgreSQL NOTIFY 수신 대기 시작...")
-
-            while True:
-                # 다른 비동기 작업들이 멈추지 않도록 1초씩 양보(sleep)하며 확인
-                await asyncio.sleep(1)
-                # DB에서 알림이 있는지 확인 (블로킹이 되지 않도록 poll 사용)
-                conn.poll()
+        [Kafka 리스너 함수]
+        FastAPI 서버가 켜질 때 백그라운드에서 무한히 실행되며, 
+        Kafka 우체통(Topic)에 새 재난문자가 오는지 24시간 감시합니다.
+        """
+        # Kafka가 비활성화되어 있으면 리스너를 시작하지 않음
+        if not settings.KAFKA_ENABLED:
+            logger.warning("⚠️ Kafka가 비활성화되어 있습니다. (.env에서 KAFKA_ENABLED=true로 설정하세요)")
+            logger.info("💡 재난문자를 받으려면 Kafka 서버 설정을 확인하고 KAFKA_ENABLED=true로 변경하세요.")
+            return
+        
+        retry_count = 0
+        max_retries = 3  # 최대 재시도 횟수
+        
+        while True:  # 연결 실패 시 재시도를 위한 외부 루프
+            consumer = None
+            try:
+                # 1. Kafka 우체국에서 데이터를 꺼내올 '구독자(Consumer)' 객체를 만듭니다.
+                consumer = AIOKafkaConsumer(
+                    'Topic_characters',                     # 창주님이 만든 Kafka 우체통(토픽) 이름입니다.
+                    bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,     # Kafka 서버의 주소와 포트입니다.
+                    group_id='disaster_consumer_group',     # 컨슈머 그룹 ID (필수) - 같은 그룹은 메시지를 나눠서 받습니다.
+                    # 받은 데이터는 010101 같은 바이트(Byte) 형태이므로, 이를 파이썬 딕셔너리(JSON)로 자동 번역해 주는 기능입니다.
+                    value_deserializer=lambda m: json.loads(m.decode('utf-8')), 
+                    auto_offset_reset='latest',             # 서버가 켜진 '지금 이 순간 이후'에 도착하는 새 문자만 받겠다는 뜻입니다.
+                    enable_auto_commit=True,                # 메시지를 읽었다는 처리(오프셋 커밋)를 자동으로 합니다.
+                    request_timeout_ms=30000,               # 요청 타임아웃 30초
+                    connections_max_idle_ms=540000          # 연결 유지 시간 9분
+                )
                 
-                # 만약 알림이 있다면:
-                while conn.notifies:
-                    # 알림 뭉치에서 하나를 꺼냄
-                    notify = conn.notifies.pop(0)
-                    # 알림 페이로드에서 character_id 추출(character_id는 트리거에서 보낸 값)
-                    character_id = int(notify.payload)
-                    
-                    # 서비스 계층을 호출하여 메시지 내용 가져오기
-                    alert_data = DisasterService.get_disaster_message(character_id)
-                    
-                    if alert_data:
-                        # 한국 시간 설정
+                # 2. Kafka 서버와 연결을 시작합니다 (타임아웃 10초)
+                await asyncio.wait_for(consumer.start(), timeout=10.0)
+                logger.info(f"✅ Kafka 연결됨")
+                retry_count = 0  # 연결 성공 시 재시도 카운터 초기화
+
+                # 3. 무한 루프를 돌며 우체통에 편지가 들어올 때까지 문 앞에서 대기합니다.
+                async for msg in consumer:
+                    try:
+                        # 편지가 도착하면 껍데기를 까서 안의 딕셔너리 데이터만 빼냅니다.
+                        data = msg.value 
+                        
+                        # 4. 한국 시간(KST)으로 현재 시간을 구합니다.
                         KST = timezone(timedelta(hours=9))
                         now_kst = datetime.now(KST).strftime("%H:%M")
                         
-                        # 재난문자 데이터 준비 (등급 및 지역 정보 포함)
+                        # 5. 프론트엔드(chat.js)가 화면에 띄우기 좋게 데이터를 예쁘게 포장합니다.
                         disaster_data = {
-                            "id": alert_data["id"],
-                            "message": alert_data["message"],
-                            "type_code": alert_data["type_code"],
-                            "type_name": alert_data["type_name"],
-                            "region": alert_data["region"],
-                            "time": now_kst
+                            "id": str(int(datetime.now().timestamp())),           # 화면에서 쓸 임시 고유 ID를 부여합니다.
+                            "message": data.get("character_content", "내용 없음"), # 재난문자 실제 내용
+                            "type_code": data.get("character_type_code", "EM"),   # EX(위급), EM(긴급), SA(안전)
+                            "type_name": data.get("disaster_emrg_step_nm", "긴급재난"), # 재난 이름 (예: 홍수, 지진)
+                            "region": data.get("disaster_rcptn_rgn_nm", ""),      # 발생 지역 (예: 서울특별시 강남구)
+                            "time": now_kst                                       # 받은 시간
                         }
                         
-                        # 큐에 추가 (모든 SSE 연결이 이 큐에서 읽음)
+                        # 6. 포장된 데이터를 FastAPI 내부의 배달 큐(대기열)에 밀어 넣습니다.
                         await disaster_queue.put(disaster_data)
-                        logger.info(f"🚨 [재난문자 {alert_data['type_code']}] [{alert_data['region']}] 큐에 추가: {alert_data['message'][:20]}...")
-
-        except Exception as e:
-            logger.error(f"❌ 재난 문자 PostgreSQL 리스너 에러: {e}")
+                        logger.info(f"🚨 [Kafka] {disaster_data['type_code']} [{disaster_data['region']}] {disaster_data['message'][:30]}...")
+                        
+                    except json.JSONDecodeError as je:
+                        logger.error(f"❌ [Kafka] JSON 파싱 오류: {je}")
+                    except Exception as e:
+                        logger.error(f"❌ [Kafka] 메시지 처리 중 오류: {e}")
+                        
+            except asyncio.TimeoutError:
+                retry_count += 1
+                logger.error(f"❌ Kafka 연결 시간 초과 (시도 {retry_count}/{max_retries})")
+                
+                if retry_count >= max_retries:
+                    logger.warning("⚠️ Kafka 연결 실패. 더 이상 재시도하지 않습니다.")
+                    logger.warning("💡 해결 방법:")
+                    logger.warning("   1. Kafka 서버 실행 여부: sudo systemctl status kafka")
+                    logger.warning("   2. 포트 확인: nc -zv 56.155.47.51 8908")
+                    logger.warning("   3. 방화벽 설정: sudo ufw allow 8908")
+                    logger.warning("   4. Kafka server.properties:")
+                    logger.warning("      listeners=PLAINTEXT://0.0.0.0:8908")
+                    logger.warning("      advertised.listeners=PLAINTEXT://56.155.47.51:8908")
+                    logger.warning("   5. 임시 비활성화: .env에서 KAFKA_ENABLED=false")
+                    break  # 재시도 중단
+                    
+                await asyncio.sleep(5)  # 5초 대기 후 재시도
+                
+            except Exception as e:
+                # Kafka 연결 실패 또는 치명적 에러
+                retry_count += 1
+                logger.error(f"❌ Kafka 리스너 오류 발생: {type(e).__name__}: {e}")
+                
+                if retry_count >= max_retries:
+                    logger.warning("⚠️ Kafka 연결 실패. 재난문자 기능이 비활성화됩니다.")
+                    break  # 재시도 중단
+                    
+                logger.info(f"🔄 {5 * retry_count}초 후 Kafka 재연결 시도... ({retry_count}/{max_retries})")
+                await asyncio.sleep(5 * retry_count)  # 점진적 대기
+                
+            finally:
+                # 7. 연결이 있었다면 안전하게 종료
+                if consumer is not None:
+                    try:
+                        await consumer.stop()
+                    except Exception as e:
+                        logger.error(f"❌ Kafka 종료 중 오류: {e}")
     
     @staticmethod
     async def generate_disaster_stream(user_id: str, request):
-        """SSE 이벤트 생성기
-        
-        Args:
-            user_id: 사용자 ID (나중에 위치 필터링에 사용)
-            request: FastAPI Request 객체 (연결 확인용)
-            
-        Yields:
-            dict: SSE 이벤트 데이터
         """
-        logger.info(f"📡 [SSE] 사용자 {user_id} 재난문자 스트림 연결")
-        
+        [SSE 실시간 전송기]
+        위의 리스너가 disaster_queue에 데이터를 밀어 넣으면, 
+        이 함수가 쏙 빼서 현재 접속 중인 사용자의 브라우저로 발사(yield)합니다.
+        """
         try:
             while True:
-                # 클라이언트 연결 확인
+                # 사용자가 브라우저 창을 닫았는지 확인합니다. 닫았다면 전송 루프를 멈춥니다.
                 if await request.is_disconnected():
-                    logger.info(f"🔌 [SSE] 사용자 {user_id} 연결 종료")
                     break
                 
-                # 재난문자 큐에서 데이터 가져오기 (타임아웃 1초)
                 try:
-                    disaster_data = await asyncio.wait_for(
-                        disaster_queue.get(), 
-                        timeout=1.0
-                    )
+                    # 대기열(큐)에 데이터가 들어올 때까지 최대 1초간 기다리며 꺼내봅니다.
+                    disaster_data = await asyncio.wait_for(disaster_queue.get(), timeout=1.0)
                     
-                    # SSE 이벤트 전송 (프론트엔드에서 필터링)
+                    # 데이터가 있다면 프론트엔드(chat.js)로 쏴줍니다! (이 yield가 핵심입니다)
                     yield {
                         "event": "disaster",
-                        "id": str(disaster_data.get("id", "")),
+                        "id": disaster_data["id"],
                         "data": disaster_data
                     }
                     
-                    logger.info(f"🚨 [SSE] 재난문자 전송 → {user_id}: {disaster_data['message'][:20]}...")
-                    
                 except asyncio.TimeoutError:
-                    # 타임아웃 시 연결 유지를 위한 ping 이벤트
-                    yield {
-                        "event": "ping",
-                        "data": "keep-alive"
-                    }
+                    # 1초 동안 대기열에 아무 재난문자도 안 들어왔다면, 
+                    # 브라우저가 "서버 죽었나?" 하고 오해하지 않도록 빈 심장박동(ping)만 보냅니다.
+                    yield {"event": "ping", "data": "keep-alive"}
                     
-        except asyncio.CancelledError:
-            logger.info(f"❌ [SSE] 사용자 {user_id} 스트림 취소됨")
         except Exception as e:
-            logger.error(f"❌ [SSE] 스트림 오류: {e}")
+            logger.error(f"❌ [SSE] 스트림 전송 중 에러: {e}")
