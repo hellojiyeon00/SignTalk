@@ -22,10 +22,9 @@ async def disaster_stream(request: Request, user_id: str):
     """SSE 스트림 엔드포인트
     
     클라이언트가 이 엔드포인트에 연결하면 실시간으로 재난문자를 수신합니다.
-    나중에 위치 기반 필터링을 추가할 예정입니다.
     
     Args:
-        user_id: 사용자 ID (나중에 위치 필터링에 사용)
+        user_id: 사용자 ID (재난문자 수신 대상 식별)
         request: FastAPI Request 객체
     
     Returns:
