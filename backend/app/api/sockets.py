@@ -10,7 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.core.database import SessionLocal
 
-from app.services.sign_service import transfer_sign2gloss
+from app.services.sign_service import call_sign2text
 
 # 로거 설정
 logger = logging.getLogger("socket")
@@ -133,7 +133,7 @@ async def handle_send_message(sid, data):
 async def handle_send_landmarks(sid, data):
     # 1. 서비스 호출 (AI 모델 예측 및 단어 추출)
     # data 안에는 username, room, message(좌표) 등이 들어있음
-    msg = await transfer_sign2gloss(data)
+    msg = await call_sign2text(data)
 
     """메시지 전송 처리
     

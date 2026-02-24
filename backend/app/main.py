@@ -6,27 +6,42 @@ import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import logging
 
 from app.core.redis_client import get_redis, close_redis
+from app.core.hdfs_client import get_hdfs
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.sockets import sio
 
+logger = logging.getLogger("backend-server")
+logging.basicConfig(level=logging.INFO)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 시작 시
+    # ===== 시작 시 =====
+
+    # Redis
     redis = await get_redis()  # Redis 연결
     # 연결 확인
     try:
         await redis.ping()
-        print("✅ Redis 연결됨")
+        logger.info("✅ Redis 연결됨")
     except Exception as e:
-        print(f"❌ Redis 연결 실패: {e}")
+        logger.error(f"❌ Redis 연결 실패: {e}")
+        raise
+
+    # HDFS 연결 및 확인
+    try:
+        hdfs = get_hdfs()
+        logger.info("✅ HDFS 연결됨")
+    except Exception as e:
+        logger.error(f"❌ HDFS 연결 실패: {e}")
         raise
 
     yield
 
-    # 종료 시
+    # ===== 종료 시 =====
     await close_redis()
     print("✅ Redis 연결 종료")
 
