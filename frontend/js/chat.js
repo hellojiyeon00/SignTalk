@@ -247,7 +247,20 @@ async function startChat(friend, clickedElement) {
                 }
             } catch (e) { }
 
-            // 수어 영상 표시 위해서 코드 추가 (소영)
+            // 수어 영상 히스토리 저장을 위해 추가 (소영)
+            // 히스토리 영상 보존: url_path(문자열) -> urls(배열)로 변환
+            let historyUrls = [];
+            if (Array.isArray(chat.urls) && chat.urls.length > 0) {
+                // 기존에 urls 배열에 내려오는 경우(호환)
+                historyUrls = chat.urls;
+            } else if (typeof chat.url_path === "string" && chat.url_path.trim().length > 0) {
+                // DB에서 STRING_AGG로 내려온 "a, b, c" 형태 처리
+                historyUrls = chat.url_path
+                    .split(",")
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            }
+
             displayMessage(
                 chat.sender,
                 chat.sender_name,

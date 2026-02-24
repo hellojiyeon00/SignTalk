@@ -30,7 +30,7 @@ def setup_logging(
         level: 로깅 레벨 (예: "DEBUG", "INFO", "WARNING", "ERROR")
     """
     root = logging.getLogger()
-    if root.handlers:
+    if getattr(root, "_model_server_logging_configured", False):
         return
     
     if isinstance(level, str):
@@ -45,13 +45,13 @@ def setup_logging(
 
     formatter = logging.Formatter(
         fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-        datefmt="%Y-%m-d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S"
     )
 
     # 콘솔
     sh = logging.StreamHandler()
     sh.setLevel(level_value)
-    sh. setFormatter(formatter)
+    sh.setFormatter(formatter)
 
     # 파일 로데이션(5MB, 5개 백업)
     fh = RotatingFileHandler(
@@ -65,3 +65,6 @@ def setup_logging(
 
     root.addHandler(sh)
     root.addHandler(fh)
+
+    # 중복 설정 방지 플래그
+    root._model_server_logging_configured = True

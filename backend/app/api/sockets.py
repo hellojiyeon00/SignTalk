@@ -124,8 +124,8 @@ async def handle_send_message(sid, data):
             t0 = time.time()
 
             logger.info(
-            f"[WS -> Model][{trace_id}] start "
-            f"room_id={room_id} sid={sid} msg_len={len(msg)}"
+            "[WS -> Model][%s] start room_id=%s sid=%s msg_len=%d",
+            trace_id, room_id, sid, len(msg)
         )
 
             msg_norm = normalize_input_text(msg)
@@ -142,13 +142,14 @@ async def handle_send_message(sid, data):
 
             msg_preview = (msg[:30] + "...") if len(msg) > 30 else msg
             logger.info(
-                f"[GLOSS] msg='{msg_preview}' -> gloss='{gloss}' urls_cnt={len(urls)} miss_cnt={len(miss)}"
-                )
+                "[GLOSS] msg_preview=%r gloss=%r url_cnt=%d miss_cnt=%d",
+                msg_preview, gloss, len(urls), len(miss)
+            )
 
             elapsed_ms = int((time.time() - t0) * 1000)
             logger.info(
-                f"[WS -> Model][{trace_id}] done"
-                f"elapsed_ms={elapsed_ms} gloss_len={len(gloss) if gloss else 0}"
+                "[WS -> Model][%s] done elapsed_ms=%d gloss_len=%d url_cnt=%d miss_cnt=%d",
+                trace_id, elapsed_ms, (len(gloss) if gloss else 0), len(urls), len(miss)
                 )
 
             # 실시간 전송
