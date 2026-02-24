@@ -14,8 +14,8 @@ logger = logging.getLogger("disaster_service")
 # aiokafka의 상세 로그 숨기기 (에러만 표시)
 logging.getLogger("aiokafka").setLevel(logging.WARNING)
 
-# FastAPI 백그라운드와 사용자 프론트엔드(SSE) 사이에서 데이터를 임시 보관할 비동기 큐(대기열)입니다.
-disaster_queue = asyncio.Queue()
+# 연결된 모든 클라이언트의 큐 목록 (브로드캐스트용)
+connected_clients = []
 
 class DisasterService:
     
@@ -76,9 +76,16 @@ class DisasterService:
                             "time": now_kst                                       # 받은 시간
                         }
                         
-                        # 6. 포장된 데이터를 FastAPI 내부의 배달 큐(대기열)에 밀어 넣습니다.
-                        await disaster_queue.put(disaster_data)
-                        logger.info(f"🚨 [Kafka] {disaster_data['type_code']} [{disaster_data['region']}] {disaster_data['message'][:30]}...")
+                        # 6. 포장된 데이터를 모든 연결된 클라이언트에게 브로드캐스트합니다.
+                        if connected_clients:
+                            # 모든 클라이언트의 큐에 동일한 메시지 전송
+                            for client_queue in connected_clients:
+                                try:
+                                    await client_queue.put(disaster_data)
+                                except Exception as e:
+                                    logger.error(f"❌ [Kafka] 클라이언트 큐 전송 오류: {e}")
+                            
+                            logger.info(f"🚨 [Kafka] {disaster_data['type_code']} [{disaster_data['region']}] {disaster_data['message'][:30]}... → {len(connected_clients)}명")
                         
                     except json.JSONDecodeError as je:
                         logger.error(f"❌ [Kafka] JSON 파싱 오류: {je}")
@@ -127,9 +134,14 @@ class DisasterService:
     async def generate_disaster_stream(user_id: str, request):
         """
         [SSE 실시간 전송기]
-        위의 리스너가 disaster_queue에 데이터를 밀어 넣으면, 
-        이 함수가 쏙 빼서 현재 접속 중인 사용자의 브라우저로 발사(yield)합니다.
+        Kafka 리스너가 받은 재난문자를 모든 연결된 클라이언트에게 브로드캐스트합니다.
+        각 클라이언트는 독립적인 큐를 가지므로 서로 간섭하지 않습니다.
         """
+        # 이 클라이언트 전용 큐 생성
+        client_queue = asyncio.Queue()
+        connected_clients.append(client_queue)
+        logger.info(f"✅ [SSE] 클라이언트 연결 (현재 {len(connected_clients)}명)")
+        
         try:
             while True:
                 # 사용자가 브라우저 창을 닫았는지 확인합니다. 닫았다면 전송 루프를 멈춥니다.
@@ -137,10 +149,10 @@ class DisasterService:
                     break
                 
                 try:
-                    # 대기열(큐)에 데이터가 들어올 때까지 최대 1초간 기다리며 꺼내봅니다.
-                    disaster_data = await asyncio.wait_for(disaster_queue.get(), timeout=1.0)
+                    # 자신의 큐에서 데이터가 들어올 때까지 최대 1초간 기다립니다.
+                    disaster_data = await asyncio.wait_for(client_queue.get(), timeout=1.0)
                     
-                    # 데이터가 있다면 프론트엔드(chat.js)로 쏴줍니다! (이 yield가 핵심입니다)
+                    # 데이터가 있다면 프론트엔드(chat.js)로 쏴줍니다!
                     yield {
                         "event": "disaster",
                         "id": disaster_data["id"],
@@ -154,3 +166,8 @@ class DisasterService:
                     
         except Exception as e:
             logger.error(f"❌ [SSE] 스트림 전송 중 에러: {e}")
+        finally:
+            # 연결 종료 시 클라이언트 목록에서 제거
+            if client_queue in connected_clients:
+                connected_clients.remove(client_queue)
+                logger.info(f"🔌 [SSE] 클라이언트 연결 해제 (남은 {len(connected_clients)}명)")

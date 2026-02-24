@@ -503,12 +503,26 @@ function saveManualLocation() {
         return;
     }
     
-    // 주소에서 시/도, 구/군 정보 추출
-    const parsedLocation = parseLocationString(location);
-    
     // localStorage에 저장
     localStorage.setItem("userLocation", location);
     localStorage.setItem("gpsEnabled", "false");
+    
+    // "전체" 입력 시 모든 재난문자 수신
+    if (location === "전체" || location.toLowerCase() === "all") {
+        localStorage.setItem("userRegion1", "전체");
+        localStorage.removeItem("userRegion2");
+        
+        // 저장된 위치 정보 표시
+        document.getElementById("savedLocationInfo").style.display = "block";
+        document.getElementById("savedLocationText").textContent = location;
+        
+        alert("✅ 전국 모든 재난문자를 수신합니다.");
+        console.log("✅ 수동 위치 저장: 전체 (모든 재난문자 수신)");
+        return;
+    }
+    
+    // 주소에서 시/도, 구/군 정보 추출
+    const parsedLocation = parseLocationString(location);
     
     // 파싱된 지역 정보 저장 (재난문자 필터링용)
     if (parsedLocation.city) {
