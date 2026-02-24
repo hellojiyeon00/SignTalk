@@ -72,6 +72,7 @@ class DisasterService:
                             "message": data.get("character_content", "내용 없음"), # 재난문자 실제 내용
                             "type_code": data.get("character_type_code", "EM"),   # EX(위급), EM(긴급), SA(안전)
                             "type_name": data.get("disaster_emrg_step_nm", "긴급재난"), # 재난 이름 (예: 홍수, 지진)
+                            "disaster_type": data.get("disaster_dst_se_nm", "기타"), # 재난 유형 (예: 지진, 홍수, 태풍)
                             "region": data.get("disaster_rcptn_rgn_nm", ""),      # 발생 지역 (예: 서울특별시 강남구)
                             "time": now_kst                                       # 받은 시간
                         }
