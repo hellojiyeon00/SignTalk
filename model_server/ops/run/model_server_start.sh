@@ -1,4 +1,4 @@
-#!/user/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # =======================================
@@ -17,7 +17,7 @@ LOG_FILE="${LOG_DIR}/model_server.out"
 
 APP_MODULE="${APP_MODULE:-main:app}"
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-8000}"
+PORT="${PORT:-8001}"
 WORKERS="${WORKERS:-1}"
 
 usage() {
@@ -26,14 +26,14 @@ usage() {
   ./ops/run/model_server_start.sh [-p PORT] [-h HOST] [-w WORKERS]
 
 옵션:
-  -p 포트 (기본: 8000)
+  -p 포트 (기본: 8001)
   -h 호스트 (기본: 0.0.0.0)
   -w 워커 수 (기본: 1)
 
 환경변수(선택):
   APP_MODULE=main:app
   HOST=0.0.0.0
-  PORT=8000
+  PORT=8001
   WORKERS=1
 EOF
 }
@@ -92,7 +92,8 @@ echo "[START] pid_file=${PID_FILE}"
 nohup uvicorn "${APP_MODULE}" \
   --host "${HOST}" \
   --port "${PORT}" \
-  --workers "${LOG_FILE}" 2>&1 &
+  --workers "${WORKERS}" \
+  > "${LOG_FILE}" 2>&1 &
 
 new_pid="$!"
 echo "${new_pid}" > "${PID_FILE}"

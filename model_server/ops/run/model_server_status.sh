@@ -1,4 +1,4 @@
-#!/user/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # ==========================
@@ -12,7 +12,7 @@ OPS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PID_DIR="${OPS_DIR}/pids"
 
 PID_FILE="${PID_DIR}/model_server.pid"
-PORT="${PORT:-8000}"
+PORT="${PORT:-8001}"
 
 is_pid_running() {
   local pid="$1"
