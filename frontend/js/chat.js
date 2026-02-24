@@ -668,6 +668,12 @@ function shouldReceiveDisaster(disasterRegion) {
         return true;
     }
     
+    // "전체" 설정 시 모든 재난문자 수신
+    if (userCity === "전체") {
+        console.log("📍 [필터링] 전체 설정 → 모든 재난 수신");
+        return true;
+    }
+    
     // 위치 설정 방식 로그
     const locationSource = gpsEnabled === "true" ? "GPS" : "수동입력";
     console.log(`📍 [필터링] 내 위치 (${locationSource}): ${userCity} ${userDistrict || ''}`);
