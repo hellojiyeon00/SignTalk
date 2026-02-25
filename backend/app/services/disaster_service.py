@@ -15,7 +15,8 @@ logger = logging.getLogger("disaster_service")
 logging.getLogger("aiokafka").setLevel(logging.WARNING)
 
 # 연결된 모든 클라이언트의 큐 목록 (브로드캐스트용)
-connected_clients = []
+# connected_clients = []
+connected_clients = {}
 
 # Kafka consumer 전역 변수 (종료 시 정리를 위해)
 kafka_consumer = None
@@ -85,7 +86,7 @@ class DisasterService:
                         # 6. 포장된 데이터를 모든 연결된 클라이언트에게 브로드캐스트합니다.
                         if connected_clients:
                             # 모든 클라이언트의 큐에 동일한 메시지 전송
-                            for client_queue in connected_clients:
+                            for client_queue in list(connected_clients.values()):
                                 try:
                                     await client_queue.put(disaster_data)
                                 except Exception as e:
@@ -152,7 +153,7 @@ class DisasterService:
         # 모든 SSE 클라이언트 연결 정리
         if connected_clients:
             logger.info(f"🔌 {len(connected_clients)}개의 SSE 연결 종료 중...")
-            for client_queue in connected_clients:
+            for client_queue in list(connected_clients.values()):
                 try:
                     # 종료 신호 전송
                     await client_queue.put({"event": "shutdown"})
@@ -179,36 +180,39 @@ class DisasterService:
                 logger.info("✅ Kafka 리스너 태스크 취소됨")
         
         logger.info("✅ 재난문자 리스너 종료 완료")
-    
+        
     @staticmethod
     async def generate_disaster_stream(user_id: str, request):
-        """
-        [SSE 실시간 전송기]
-        Kafka 리스너가 받은 재난문자를 모든 연결된 클라이언트에게 브로드캐스트합니다.
-        각 클라이언트는 독립적인 큐를 가지므로 서로 간섭하지 않습니다.
-        """
-        # 이 클라이언트 전용 큐 생성
+        """[수정됨] 사용자 지정석(Dictionary) 방식의 SSE 스트림"""
+        
+        # 🌟 1. 이미 내 이름(user_id)으로 된 기존 연결(유령)이 있다면 강제로 종료 신호를 보냅니다.
+        if user_id in connected_clients:
+            logger.info(f"🔄 [SSE] 중복 접속 감지! 기존 유령 연결을 밀어냅니다. (user_id: {user_id})")
+            try:
+                await connected_clients[user_id].put({"event": "shutdown"})
+            except Exception:
+                pass
+                
+        # 2. 새 바구니(큐)를 만들고, 내 전용 자리에 앉습니다.
         client_queue = asyncio.Queue()
-        connected_clients.append(client_queue)
-        logger.info(f"✅ [SSE] 클라이언트 연결 (현재 {len(connected_clients)}명)")
+        connected_clients[user_id] = client_queue
+        logger.info(f"✅ [SSE] 클라이언트 연결됨 (현재 실제 접속자: {len(connected_clients)}명)")
         
         try:
             while True:
-                # 사용자가 브라우저 창을 닫았는지 확인합니다. 닫았다면 전송 루프를 멈춥니다.
+                # 사용자가 브라우저 창을 닫았는지 확인
                 if await request.is_disconnected():
-                    logger.info(f"🔌 [SSE] 클라이언트 연결 해제 감지 (user_id: {user_id})")
+                    logger.info(f"👋 [SSE] 클라이언트 연결 종료 감지 (user_id: {user_id})")
                     break
                 
                 try:
-                    # 자신의 큐에서 데이터가 들어올 때까지 최대 1초간 기다립니다.
                     disaster_data = await asyncio.wait_for(client_queue.get(), timeout=1.0)
                     
-                    # 종료 신호 확인
+                    # 내 자리를 뺏은 새로운 접속자가 나에게 'shutdown'을 보냈다면 얌전히 물러납니다.
                     if isinstance(disaster_data, dict) and disaster_data.get("event") == "shutdown":
-                        logger.info(f"🛑 [SSE] 서버 종료 신호 수신 (user_id: {user_id})")
+                        logger.info(f"🛑 [SSE] 새로고침으로 인해 이전 연결이 종료됩니다. (user_id: {user_id})")
                         break
                     
-                    # 데이터가 있다면 프론트엔드(chat.js)로 쏴줍니다!
                     yield {
                         "event": "disaster",
                         "id": disaster_data["id"],
@@ -216,17 +220,16 @@ class DisasterService:
                     }
                     
                 except asyncio.TimeoutError:
-                    # 1초 동안 대기열에 아무 재난문자도 안 들어왔다면, 
-                    # 브라우저가 "서버 죽었나?" 하고 오해하지 않도록 빈 심장박동(ping)만 보냅니다.
                     yield {"event": "ping", "data": "keep-alive"}
                     
         except asyncio.CancelledError:
-            logger.info(f"⚠️ [SSE] 스트림 취소됨 (user_id: {user_id})")
-            raise
+            pass
         except Exception as e:
-            logger.error(f"❌ [SSE] 스트림 전송 중 에러: {e}")
+            logger.error(f"❌ [SSE] 스트림 에러: {e}")
         finally:
-            # 연결 종료 시 클라이언트 목록에서 제거
-            if client_queue in connected_clients:
-                connected_clients.remove(client_queue)
-                logger.info(f"🔌 [SSE] 클라이언트 정리 완료 (남은 {len(connected_clients)}명)")
+            # 🌟 3. 내가 나갈 때, '내 자리에 있는 바구니'가 '지금 치우려는 이 바구니'가 맞을 때만 치웁니다.
+            # (새로고침으로 인해 이미 새 바구니로 교체되었는데, 이전 바구니가 자리를 치워버리는 대참사 방지)
+            if connected_clients.get(user_id) == client_queue:
+                del connected_clients[user_id]
+                logger.info(f"🔌 [SSE] 클라이언트 퇴장 완료 (남은 접속자: {len(connected_clients)}명)")
+    
