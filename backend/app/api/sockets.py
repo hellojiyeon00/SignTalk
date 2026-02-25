@@ -7,6 +7,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from sqlalchemy import text
 from fastapi.concurrency import run_in_threadpool
 
@@ -86,17 +87,163 @@ def save_message_sync(room_id: int, sender_id: str, msg: str):
             "m_no": member_no,
             "msg": msg,
             "c_user": sender_id
-        })
+        })        
         db.commit()
         
         return sender_name
 
     except Exception as e:
-        logger.error(f"❌ [DB 에러] 메시지 저장 실패: {e}")
+        logger.error(f"[DB 에러] 메시지 저장 실패: {e}")
         db.rollback()
-        raise e
+        raise
     finally:
         db.close()
+
+# 영상 저장을 위해 추가 (소영)
+def save_message_with_key_sync(room_id: int, sender_id: str, msg: str):
+    """talk 저장 + talk_detail 저장에 필요한 키(member_no, talk_date)까지 반환 (동기)
+
+    Returns:
+        dict | None: {"sender_name": str, "member_no": int, "talk_date": datetime}
+    """
+    db = SessionLocal()
+    try:
+        get_user_sql = text(
+            "SELECT member_no, full_name FROM multicampus_schema.member WHERE member_id = :id"
+        )
+        user_info = db.execute(get_user_sql, {"id": sender_id}).fetchone()
+        if not user_info:
+            logger.warning(f"[DB 저장 실패] 존재하지 않는 사용자: {sender_id}")
+            return None
+
+        member_no, sender_name = user_info[0], user_info[1]
+
+        insert_sql = text("""
+            INSERT INTO multicampus_schema.talk (
+                talk_room_id, member_no, talk_date, message, create_user
+            ) VALUES (
+                :r_id, :m_no, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul', :msg, :c_user
+            )
+            RETURNING talk_date
+        """)
+
+        talk_date = db.execute(insert_sql, {
+            "r_id": room_id,
+            "m_no": member_no,
+            "msg": msg,
+            "c_user": sender_id
+        }).scalar()
+
+        db.commit()
+
+        return {"sender_name": sender_name, "member_no": member_no, "talk_date": talk_date}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[DB 에러] talk_detail 저장 실패: {e}")
+        raise
+    finally:
+        db.close()
+
+
+def save_talk_detail_sync(
+    talk_room_id: int,
+    member_no: int,
+    talk_date,
+    gloss: Optional[str],
+    urls: list,
+    miss: list[str],
+    create_user: str
+):
+    """
+    talk_detail 저장 (동기)
+
+    - 식별 키: (talk_room_id, member_no, talk_date)
+    - 정렬 키: word_order_no (1부터)
+
+    정책:
+    - url 매칭된 토큰만 저장
+    - miss 토큰은 저장하지 않음
+    - urls는 "매칭된 토큰 순서대로" 들어온다고 가정하고,
+      miss 토큰을 건너뛰면서 url 인덱스를 소비한다.
+    """
+    if not gloss:
+        return 0
+
+    tokens = [t for t in gloss.split() if t.strip()]
+    if not tokens:
+        return 0
+
+    miss_set = set(miss or [])
+
+    db = SessionLocal()
+    try:
+        insert_sql = text("""
+            INSERT INTO multicampus_schema.talk_detail (
+                talk_room_id,
+                member_no,
+                talk_date,
+                word_order_no,
+                word_name,
+                url_path,
+                vector,
+                create_user,
+                create_date
+            ) VALUES (
+                :talk_room_id,
+                :member_no,
+                :talk_date,
+                :word_order_no,
+                :word_name,
+                :url_path,
+                :vector,
+                :create_user,
+                CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
+            )
+        """)
+
+        rows = 0
+        order_no = 1
+        url_idx = 0
+
+        for word in tokens:
+            # 매핑 실패 토큰은 저장 대상 아님
+            if word in miss_set:
+                continue
+
+            # 매칭된 토큰에 대해서만 urls를 순서대로 소비
+            if url_idx >= len(urls):
+                break
+
+            url_path = urls[url_idx]
+            url_idx += 1
+
+            if not url_path:
+                continue
+
+            db.execute(insert_sql, {
+                "talk_room_id": talk_room_id,
+                "member_no": member_no,
+                "talk_date": talk_date,
+                "word_order_no": order_no,
+                "word_name": word,
+                "url_path": url_path,
+                "vector": "[]",
+                "create_user": create_user
+            })
+            rows += 1
+            order_no += 1
+
+        db.commit()
+        return rows
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[DB 에러] talk_detail 저장 실패: {e}")
+        raise
+    finally:
+        db.close()
+
 
 @sio.on("send_message")
 async def handle_send_message(sid, data):
@@ -118,14 +265,22 @@ async def handle_send_message(sid, data):
     if room and sender_id and msg:
         try:
             # DB 저장 (별도 스레드)
-            sender_name = await run_in_threadpool(save_message_sync, room_id, sender_id, msg)
+            # sender_name = await run_in_threadpool(save_message_sync, room_id, sender_id, msg)
+            saved = await run_in_threadpool(save_message_with_key_sync, room_id, sender_id, msg)
+            if not saved:
+                return
+            
+            sender_name = saved["sender_name"]
+            member_no = saved["member_no"]
+            talk_date = saved["talk_date"]
+            
             # 추가 model_server 전달 검증 로그 (소영)
             trace_id = uuid.uuid4().hex[:8]
             t0 = time.time()
 
             logger.info(
-            f"[WS -> Model][{trace_id}] start "
-            f"room_id={room_id} sid={sid} msg_len={len(msg)}"
+            "[WS -> Model][%s] start room_id=%s sid=%s msg_len=%d",
+            trace_id, room_id, sid, len(msg)
         )
 
             msg_norm = normalize_input_text(msg)
@@ -140,15 +295,32 @@ async def handle_send_message(sid, data):
             urls = result.get("urls", [])
             miss = result.get("miss", [])
 
+            saved_rows = await run_in_threadpool(
+            save_talk_detail_sync,
+            room_id,
+            member_no,
+            talk_date,
+            gloss,
+            urls,
+            miss,
+            sender_id
+        )
+
+            logger.info(
+                "[DB] talk_detail saved_rows=%d room_id=%s member_no=%s talk_date=%s",
+                saved_rows, room_id, member_no, talk_date
+            )
+
             msg_preview = (msg[:30] + "...") if len(msg) > 30 else msg
             logger.info(
-                f"[GLOSS] msg='{msg_preview}' -> gloss='{gloss}' urls_cnt={len(urls)} miss_cnt={len(miss)}"
-                )
+                "[GLOSS] msg_preview=%r gloss=%r url_cnt=%d miss_cnt=%d",
+                msg_preview, gloss, len(urls), len(miss)
+            )
 
             elapsed_ms = int((time.time() - t0) * 1000)
             logger.info(
-                f"[WS -> Model][{trace_id}] done"
-                f"elapsed_ms={elapsed_ms} gloss_len={len(gloss) if gloss else 0}"
+                "[WS -> Model][%s] done elapsed_ms=%d gloss_len=%d url_cnt=%d miss_cnt=%d",
+                trace_id, elapsed_ms, (len(gloss) if gloss else 0), len(urls), len(miss)
                 )
 
             # 실시간 전송

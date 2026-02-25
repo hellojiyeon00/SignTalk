@@ -60,4 +60,25 @@ def clean_gloss(gloss: str) -> str:
         if tok_clean:
             out.append(tok_clean)
 
-    return " ".join(out)
+    dedup: list[str] = []
+    for tok in out:
+        if dedup:
+            prev = dedup[-1]
+
+            if tok.startswith(prev) and tok != prev:
+                rest = tok[len(prev):]
+
+                # rest가 짧고(노이즈) 또는 동일 패턴 반복이면 제거
+                # - "하세요하세요"처럼 동일 청크 반복을 잡기 위해 2글자 이상 반복 체크
+                if len(rest) <= 6:
+                    continue
+
+                # 간단 반복 패턴(예: '하세요' 반복) 탐지
+                if len(rest) % 2 == 0:
+                    half = rest[: len(rest)//2]
+                    if half and half * 2 == rest:
+                        continue
+
+        dedup.append(tok)
+
+    return " ".join(dedup)

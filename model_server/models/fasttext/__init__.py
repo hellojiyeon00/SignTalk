@@ -30,6 +30,7 @@ def infer(req: Dict[str, Any]) -> Dict[str, Any]:
 
     payload = req.get("payload") or {}
     tokens = payload.get("tokens") or []
+    print(f"[fasttext.infer] tokens={tokens!r}")
     if not isinstance(tokens, list):
         raise ValueError("payload.tokens must be list[str]")
     
