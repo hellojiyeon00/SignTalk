@@ -64,12 +64,12 @@ function shouldReceiveDisaster(disasterRegion) {
 
 // ======== SSE 연결 ========
 function connectDisasterSSE() {
-    /* SSE 연결로 재난문자 수신 */
+    /* SSE 연결로 재난문자 수신 (EventSource 사용 - JWT 인증 불포함) */
     if (disasterEventSource) {
         disasterEventSource.close();
     }
     
-    // SSE 연결 생성
+    // SSE 연결 생성 (EventSource는 커스텀 헤더를 지원하지 않음)
     disasterEventSource = new EventSource(`${BASE_URL}/disaster/stream?user_id=${myId}`);
     
     // 재난문자 수신 이벤트

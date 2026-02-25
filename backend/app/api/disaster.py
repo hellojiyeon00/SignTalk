@@ -16,16 +16,17 @@ router = APIRouter()
 logger = logging.getLogger("disaster_api")
 
 
-# @router.get("/stream"): GET 요청으로 SSE 스트림 제공
+# @router.get("/stream"): GET 요청으로 SSE 스트림 제공 (인증 불필요 - EventSource는 커스텀 헤더 미지원)
 @router.get("/stream")
 async def disaster_stream(request: Request, user_id: str):
     """SSE 스트림 엔드포인트
     
     클라이언트가 이 엔드포인트에 연결하면 실시간으로 재난문자를 수신합니다.
+    EventSource API는 커스텀 헤더를 지원하지 않으므로 JWT 인증 제외
     
     Args:
-        user_id: 사용자 ID (재난문자 수신 대상 식별)
         request: FastAPI Request 객체
+        user_id: 사용자 ID (쿼리 파라미터)
     
     Returns:
         EventSourceResponse: SSE 스트림

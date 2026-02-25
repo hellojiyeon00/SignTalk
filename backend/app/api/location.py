@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.post("/reverse-geocode", response_model=AddressResponse)
 async def reverse_geocode(coords: CoordinatesRequest):
-    """위도/경도를 주소로 변환
+    """위도/경도를 주소로 변환 (인증 불필요)
     
     Args:
         coords: 위도/경도 정보
