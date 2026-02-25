@@ -208,7 +208,6 @@ function getDisasterConfig(typeCode) {
 function getDisasterImage(disasterType) {
     /* 재난 유형에 따른 이미지 경로 반환 */
     const imageMap = {
-        '초미세먼지': `${BASE_URL}/images/ultra_fine_microdust.png`,
         '미세먼지': `${BASE_URL}/images/ultra_fine_microdust.png`,
         '한파': `${BASE_URL}/images/bitter_cold.png`,
         '폭염': `${BASE_URL}/images/heat_wave.png`,
@@ -369,6 +368,7 @@ function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, d
         console.log(`ℹ️ [모달 이미지] 표시 안 함 - 등급: ${typeCode}, 유형: ${disasterType}`);
     }
     
+    // 등급명(typeName)이 있으면 표시, 없으면 config의 기본 제목 사용
     const displayTitle = typeName || config.title;
     alertDiv.innerHTML = `
         <div style="font-size: 12px; font-weight: bold; color: ${config.color}; margin-bottom: 5px;">

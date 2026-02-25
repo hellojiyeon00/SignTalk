@@ -39,7 +39,22 @@ app.mount("/images", StaticFiles(directory="../image"), name="images")
 @app.on_event("startup") 
 async def startup_event():
     # SSE 재난문자 리스너를 백그라운드에서 가동
-    asyncio.create_task(DisasterService.start_disaster_listener())
+    from app.services.disaster_service import kafka_listener_task
+    import app.services.disaster_service as ds
+    ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
+
+# 서버 종료 시 실행할 정리 작업 (비동기)
+@app.on_event("shutdown")
+async def shutdown_event():
+    """서버 종료 시 모든 연결과 리소스를 정리합니다."""
+    import logging
+    logger = logging.getLogger("main")
+    logger.info("🛑 서버 종료 시작...")
+    
+    # Kafka 리스너 및 SSE 연결 정리
+    await DisasterService.stop_disaster_listener()
+    
+    logger.info("✅ 서버 종료 완료")
 
 # Socket.IO 통합 - app과 sio를 연결하여 Socket.IO 서버로 FastAPI 앱을 감쌈
 app = socketio.ASGIApp(sio, app)
