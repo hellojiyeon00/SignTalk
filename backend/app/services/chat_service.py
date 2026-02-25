@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-import hashlib
 import time
 from typing import Any, Dict, Optional
 
@@ -24,13 +23,67 @@ from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
-# text 확인을 위해 추가 (소영)
-# 해시 계산용 유틸 함수
-def _sha256(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
 class ChatService:
     """채팅 관련 비즈니스 로직 처리"""
+    @staticmethod
+    def _apply_fasttext_best(
+        gloss_clean: str,
+        miss_tokens: list[str],
+        fast_res: dict,
+        threshold: float = 0.65,
+    ) -> tuple[str, list[dict]]:
+        """
+        fastText best 결과를 gloss_clean에 '치환' 적용한다.
+
+        규칙:
+        - miss_tokens에 대해서만 적용
+        - fast_res[token].best 가 존재하고 score >= threshold 인 경우에만 치환
+        - 치환은 토큰 단위(공백 split) 기준으로 '동일 토큰'만 교체
+
+        반환:
+        - new_gloss: 치환된 gloss 문자열
+        - replaced: 치환 내역 리스트 [{src, dst, score}]
+        """
+        if not gloss_clean or not miss_tokens or not fast_res:
+            return gloss_clean, []
+
+        tokens = [t for t in gloss_clean.split() if t.strip()]
+        if not tokens:
+            return gloss_clean, []
+
+        miss_set = set(miss_tokens)
+        replaced: list[dict] = []
+
+        for i, tok in enumerate(tokens):
+            if tok not in miss_set:
+                continue
+
+            info = fast_res.get(tok)
+            if not isinstance(info, dict):
+                continue
+
+            best = info.get("best")
+            score = info.get("score")
+
+            if not best or not isinstance(best, str):
+                continue
+            try:
+                score_f = float(score)
+            except Exception:
+                continue
+
+            if score_f < threshold:
+                continue
+
+            if best == tok:
+                continue
+
+            tokens[i] = best
+            replaced.append({"src": tok, "dst": best, "score": score_f})
+
+        new_gloss = " ".join(tokens)
+        return new_gloss, replaced
+
 
     # KoBART에서 생성한 Gloss Token 전처리 후 DB Word-Video url 연결을 위해 추가 (소영)
     @staticmethod
@@ -44,8 +97,7 @@ class ChatService:
             return [], []
 
         # 여기서 clean_gloss를 먼저 적용 (매핑률/미스 일관성 확보)
-        logger.info("[GLOSS RAW] %r", gloss[:200])
-        gloss_clean = clean_gloss(gloss)
+        gloss_clean = gloss.strip()
         if not gloss_clean:
             return [], []
 
@@ -73,8 +125,7 @@ class ChatService:
             miss = [t for t in tokens if t not in mapping]
 
             if miss:
-                logger.info(f"[URL MAP] miss={miss[:10]} (total={len(miss)})")
-
+                logger.debug("[URL MAP] miss_sample=%s total=%d", miss[:10], len(miss))
             return urls, miss
 
         finally:
@@ -103,24 +154,7 @@ class ChatService:
         )
         model_text = " ".join(model_text.split())
 
-        logger.info(
-            "[text_to_gloss_sync] raw_len=%d clean_len=%d model_len=%d raw_hash=%s clean_hash=%s model_hash=%s clean_preview=%r model_preview=%r",
-            len(text),
-            len(clean_text),
-            len(model_text),
-            _sha256(text),
-            _sha256(clean_text),
-            _sha256(model_text),
-            clean_text[:80],
-            model_text[:80]
-        )
-        logger.info(
-            "[client->server] has_dot_clean=%s has_dot_model=%s clean_preview=%r model_preview=%r",
-            ("." in clean_text),
-            ("." in model_text),
-            clean_text[:120],
-            model_text[:120]
-        )
+        logger.info("[CHAT] start raw_len=%d model_len=%d", len(text), len(model_text))
 
         # 멀티 model_server 표준 호출로 전환
         t_kobart = time.time()
@@ -138,10 +172,8 @@ class ChatService:
         meta = result.get("meta") if isinstance(result, dict) and isinstance(result.get("meta"), dict) else None
         
         # [DEBUG] /infer/kobart 경로 메타 확인 (device/params/model_dir/model_text)
-        logger.info("[KOBART META] %s", meta)
-        logger.info("[KOBART MODEL_TEXT] %r", result.get("model_text") if isinstance(result, dict) else None)
-
-        logger.info("[KOBART GLOSS RAW FULL_PREVIEW] %r", (gloss or "")[:300])
+        logger.debug("[KOBART META] %s", meta)
+        logger.debug("[KOBART GLOSS RAW FULL_PREVIEW] %r", (gloss or "")[:300])
 
         # 모델 응답 gloss 후처리 (토큰 정제)
         if not gloss:
@@ -149,30 +181,86 @@ class ChatService:
 
         t_map = time.time()
         gloss_clean = clean_gloss(gloss)
+        logger.info("[DEBUG GLOSS] raw=%r clean=%r", (gloss or "")[:200], (gloss_clean or "")[:200])
         urls, miss = ChatService.gloss_to_urls(gloss_clean)
         logger.info("[TIMING] url_map_ms=%d", int((time.time() - t_map) * 1000))
 
         # Step A: miss 토큰이 있을 때만 fastText 호출 (실패해도 절대 전체 흐름 실패시키지 않음)
         if miss:
-            trace_id = _sha256(gloss_clean)[:8]
+            logger.info("[FASTTEXT] miss_tokens=%s", miss)
+            trace_id = f"ft-{len(miss)}"
             try:
                 t_ft = time.time()
-                fast_res = fasttext_client.infer_payload_sync("fasttext", {"tokens": miss})
+                ft_payload = {"tokens": miss}
+                logger.info("[FASTTEXT] send_payload=%s", ft_payload)
+
+                fast_res = fasttext_client.infer_payload_sync("fasttext", ft_payload)
+                
+                logger.info("[FASTTEXT][%s] resp=%s", trace_id, str(fast_res)[:800])  # ✅ 추가 (INFO)
                 logger.info("[TIMING] fasttext_ms=%d", int((time.time() - t_ft) * 1000))
-                logger.info(
+                logger.debug(
                     "[FASTTEXT][%s] miss_cnt=%d resp_preview=%r",
                     trace_id,
                     len(miss),
-                    str(fast_res)[:2000],
+                    str(fast_res)[:400],
                 )
+                # =========================
+                # Step B: fastText best 적용 + 2차 URL 재매핑
+                # =========================
+                threshold = 0.65
+
+                ft_results = {}
+
+                if isinstance(fast_res, dict):
+                    ft_result = fast_res.get("result") if isinstance(fast_res.get("result"), dict) else {}
+                    ft_results = ft_result.get("results") if isinstance(ft_result.get("results"), dict) else {}
+
+                    new_gloss, replaced = ChatService._apply_fasttext_best(
+                    gloss_clean=gloss_clean,
+                    miss_tokens=miss,
+                    fast_res=ft_results,
+                    threshold=threshold
+                )
+                    
+                if replaced:
+                    before_url_cnt = len(urls)
+                    before_miss_cnt = len(miss)
+
+                    logger.info("[FASTTEXT][%s] replaced=%s", trace_id, replaced)
+
+                    # 2차 매핑
+                    urls2, miss2 = ChatService.gloss_to_urls(new_gloss)
+
+                    logger.info(
+                        "[FASTTEXT][%s] remap url_cnt %d->%d miss_cnt %d->%d",
+                        trace_id,
+                        before_url_cnt,
+                        len(urls2),
+                        before_miss_cnt,
+                        len(miss2),
+                    )
+
+                    # 최종 반영
+                    gloss_clean = new_gloss
+                    urls = urls2
+                    miss = miss2
+                else:
+                    logger.info("[FASTTEXT][%s] replaced=none", trace_id)
             except Exception as e:
                 # Step A에서는 fastText 실패를 무조건 삼키고 진행 (스택트레이스는 남기지 않음)
                 logger.warning("[FASTTEXT][%s] call failed (Step A): %s", trace_id, e)
                 fast_res = {"ok": False, "task": "fasttext", "error": "timeout", "result": None}
         else:
-            logger.info("[FASTTEXT] skip (no miss tokens)")
+            logger.debug("[FASTTEXT] skip (no miss tokens)")
 
-        # Step A에서는 절대 merge 하지 않고 기존 결과 그대로 반환
+        logger.info(
+            "[CHAT] done gloss_len=%d url_cnt=%d miss_cnt=%d",
+            len(gloss_clean) if gloss_clean else 0,
+            len(urls),
+            len(miss)
+        )
+
+        # Step B 적용 후 최종 결과 반환
         return {"gloss": gloss_clean, "urls": urls, "miss": miss, "meta": meta}
 
     @staticmethod
@@ -307,14 +395,40 @@ class ChatService:
         Returns:
             list: [{"message", "sender", "sender_name", "date"}, ...]
         """
+        # history_sql = text("""
+        #     SELECT T.message, M.member_id, M.full_name, T.talk_date
+        #     FROM multicampus_schema.talk T
+        #     JOIN multicampus_schema.member M ON T.member_no = M.member_no
+        #     WHERE T.talk_room_id = :r_id
+        #     ORDER BY T.talk_date ASC
+        # """)
         history_sql = text("""
-            SELECT T.message, M.member_id, M.full_name, T.talk_date
+            SELECT
+                T.message,
+                M.member_id,
+                M.full_name,
+                T.talk_date,
+                COALESCE(D.urls, ARRAY[]::text[]) AS urls
             FROM multicampus_schema.talk T
-            JOIN multicampus_schema.member M ON T.member_no = M.member_no
+            JOIN multicampus_schema.member M
+            ON T.member_no = M.member_no
+            LEFT JOIN (
+                SELECT
+                    talk_room_id,
+                    member_no,
+                    talk_date,
+                    ARRAY_AGG(url_path ORDER BY word_order_no)
+                    FILTER (WHERE url_path IS NOT NULL) AS urls
+                FROM multicampus_schema.talk_detail
+                GROUP BY talk_room_id, member_no, talk_date
+            ) D
+            ON D.talk_room_id = T.talk_room_id
+            AND D.member_no    = T.member_no
+            AND D.talk_date    = T.talk_date
             WHERE T.talk_room_id = :r_id
             ORDER BY T.talk_date ASC
         """)
-        
+
         results = db.execute(history_sql, {"r_id": room_id}).fetchall()
         
         return [
@@ -322,6 +436,7 @@ class ChatService:
                 "message": row[0], 
                 "sender": row[1],
                 "sender_name": row[2],
-                "date": row[3].strftime("%H:%M")
+                "date": row[3].strftime("%H:%M"),
+                "urls": row[4] or []
             } for row in results
         ]
