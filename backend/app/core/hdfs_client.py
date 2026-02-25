@@ -10,6 +10,6 @@ async def get_hdfs():
     global hdfs_client
 
     if hdfs_client is None:
-        hdfs_client = InsecureClient(settings.HDFS_URL, user=settings.HDFS_USER, timeout=5)
+        hdfs_client = InsecureClient(settings.HDFS_URL, user=settings.HDFS_USER, timeout=30)
 
     return hdfs_client
