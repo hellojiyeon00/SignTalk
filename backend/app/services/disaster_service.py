@@ -17,6 +17,10 @@ logging.getLogger("aiokafka").setLevel(logging.WARNING)
 # 연결된 모든 클라이언트의 큐 목록 (브로드캐스트용)
 connected_clients = []
 
+# Kafka consumer 전역 변수 (종료 시 정리를 위해)
+kafka_consumer = None
+kafka_listener_task = None
+
 class DisasterService:
     
     @staticmethod
@@ -26,6 +30,8 @@ class DisasterService:
         FastAPI 서버가 켜질 때 백그라운드에서 무한히 실행되며, 
         Kafka 우체통(Topic)에 새 재난문자가 오는지 24시간 감시합니다.
         """
+        global kafka_consumer
+        
         # Kafka가 비활성화되어 있으면 리스너를 시작하지 않음
         if not settings.KAFKA_ENABLED:
             logger.warning("⚠️ Kafka가 비활성화되어 있습니다. (.env에서 KAFKA_ENABLED=true로 설정하세요)")
@@ -36,10 +42,9 @@ class DisasterService:
         max_retries = 3  # 최대 재시도 횟수
         
         while True:  # 연결 실패 시 재시도를 위한 외부 루프
-            consumer = None
             try:
                 # 1. Kafka 우체국에서 데이터를 꺼내올 '구독자(Consumer)' 객체를 만듭니다.
-                consumer = AIOKafkaConsumer(
+                kafka_consumer = AIOKafkaConsumer(
                     'Topic_characters',                     # 창주님이 만든 Kafka 우체통(토픽) 이름입니다.
                     bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,     # Kafka 서버의 주소와 포트입니다.
                     group_id='disaster_consumer_group',     # 컨슈머 그룹 ID (필수) - 같은 그룹은 메시지를 나눠서 받습니다.
@@ -52,12 +57,12 @@ class DisasterService:
                 )
                 
                 # 2. Kafka 서버와 연결을 시작합니다 (타임아웃 10초)
-                await asyncio.wait_for(consumer.start(), timeout=10.0)
+                await asyncio.wait_for(kafka_consumer.start(), timeout=10.0)
                 logger.info(f"✅ Kafka 연결됨")
                 retry_count = 0  # 연결 성공 시 재시도 카운터 초기화
 
                 # 3. 무한 루프를 돌며 우체통에 편지가 들어올 때까지 문 앞에서 대기합니다.
-                async for msg in consumer:
+                async for msg in kafka_consumer:
                     try:
                         # 편지가 도착하면 껍데기를 까서 안의 딕셔너리 데이터만 빼냅니다.
                         data = msg.value 
@@ -125,11 +130,55 @@ class DisasterService:
                 
             finally:
                 # 7. 연결이 있었다면 안전하게 종료
-                if consumer is not None:
+                if kafka_consumer is not None:
                     try:
-                        await consumer.stop()
+                        logger.info("🔄 Kafka consumer 종료 중...")
+                        await kafka_consumer.stop()
+                        logger.info("✅ Kafka consumer 정상 종료됨")
                     except Exception as e:
                         logger.error(f"❌ Kafka 종료 중 오류: {e}")
+                kafka_consumer = None
+    
+    @staticmethod
+    async def stop_disaster_listener():
+        """
+        [Kafka 리스너 종료]
+        서버 종료 시 Kafka consumer를 안전하게 정리합니다.
+        """
+        global kafka_consumer, kafka_listener_task
+        
+        logger.info("🛑 재난문자 리스너 종료 시작...")
+        
+        # 모든 SSE 클라이언트 연결 정리
+        if connected_clients:
+            logger.info(f"🔌 {len(connected_clients)}개의 SSE 연결 종료 중...")
+            for client_queue in connected_clients:
+                try:
+                    # 종료 신호 전송
+                    await client_queue.put({"event": "shutdown"})
+                except Exception as e:
+                    logger.error(f"❌ 클라이언트 큐 정리 오류: {e}")
+            connected_clients.clear()
+            logger.info("✅ 모든 SSE 연결 종료됨")
+        
+        # Kafka consumer 종료
+        if kafka_consumer is not None:
+            try:
+                logger.info("🔄 Kafka consumer 종료 중...")
+                await kafka_consumer.stop()
+                logger.info("✅ Kafka consumer 정상 종료됨")
+            except Exception as e:
+                logger.error(f"❌ Kafka 종료 오류: {e}")
+        
+        # 리스너 태스크 취소
+        if kafka_listener_task is not None and not kafka_listener_task.done():
+            kafka_listener_task.cancel()
+            try:
+                await kafka_listener_task
+            except asyncio.CancelledError:
+                logger.info("✅ Kafka 리스너 태스크 취소됨")
+        
+        logger.info("✅ 재난문자 리스너 종료 완료")
     
     @staticmethod
     async def generate_disaster_stream(user_id: str, request):
@@ -147,11 +196,17 @@ class DisasterService:
             while True:
                 # 사용자가 브라우저 창을 닫았는지 확인합니다. 닫았다면 전송 루프를 멈춥니다.
                 if await request.is_disconnected():
+                    logger.info(f"🔌 [SSE] 클라이언트 연결 해제 감지 (user_id: {user_id})")
                     break
                 
                 try:
                     # 자신의 큐에서 데이터가 들어올 때까지 최대 1초간 기다립니다.
                     disaster_data = await asyncio.wait_for(client_queue.get(), timeout=1.0)
+                    
+                    # 종료 신호 확인
+                    if isinstance(disaster_data, dict) and disaster_data.get("event") == "shutdown":
+                        logger.info(f"🛑 [SSE] 서버 종료 신호 수신 (user_id: {user_id})")
+                        break
                     
                     # 데이터가 있다면 프론트엔드(chat.js)로 쏴줍니다!
                     yield {
@@ -165,10 +220,13 @@ class DisasterService:
                     # 브라우저가 "서버 죽었나?" 하고 오해하지 않도록 빈 심장박동(ping)만 보냅니다.
                     yield {"event": "ping", "data": "keep-alive"}
                     
+        except asyncio.CancelledError:
+            logger.info(f"⚠️ [SSE] 스트림 취소됨 (user_id: {user_id})")
+            raise
         except Exception as e:
             logger.error(f"❌ [SSE] 스트림 전송 중 에러: {e}")
         finally:
             # 연결 종료 시 클라이언트 목록에서 제거
             if client_queue in connected_clients:
                 connected_clients.remove(client_queue)
-                logger.info(f"🔌 [SSE] 클라이언트 연결 해제 (남은 {len(connected_clients)}명)")
+                logger.info(f"🔌 [SSE] 클라이언트 정리 완료 (남은 {len(connected_clients)}명)")
