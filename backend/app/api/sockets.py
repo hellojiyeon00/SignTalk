@@ -11,6 +11,8 @@ from fastapi.concurrency import run_in_threadpool
 from app.core.database import SessionLocal
 
 from app.services.sign_service import call_sign2text
+from app.services.redis_service import clear_session
+from app.services.hdfs_service import save_hdfs
 
 # 로거 설정
 logger = logging.getLogger("socket")
@@ -165,5 +167,12 @@ async def handle_send_landmarks(sid, data):
                 
                 await sio.emit("receive_message", payload, room=room_name)
                 
+                # HDFS 서비스 호출
+                talk_date = datetime.now(KST).isoformat()
+                await save_hdfs(room_id, sender_id, talk_date, msg)
+
+                # 세션 정리
+                await clear_session(room_id, sender_id)
+
         except Exception as e:
             logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
