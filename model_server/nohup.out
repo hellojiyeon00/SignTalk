@@ -1,0 +1,8 @@
+Usage: uvicorn [OPTIONS] APP
+Try 'uvicorn --help' for help.
+
+Error: Invalid value for '--workers': '/home/lab06/SignTalk/model_server/ops/logs/model_server.out' is not a valid integer.
+Usage: uvicorn [OPTIONS] APP
+Try 'uvicorn --help' for help.
+
+Error: Invalid value for '--workers': '/home/lab06/SignTalk/model_server/ops/logs/model_server.out' is not a valid integer.

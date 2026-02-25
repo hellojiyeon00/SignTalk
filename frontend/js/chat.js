@@ -307,6 +307,15 @@ function sendMessage() {
 function displayMessage(senderId, senderName, msg, time, gloss = "", urls = [], miss = []) {
     /* 말풍선 렌더링 */
     const msgBox = document.getElementById("messages");
+
+    // urls 방어: null/undefined/빈문자 제거 (video.src 오류 방지)
+    if (Array.isArray(urls)) {
+        urls = urls
+            .map(u => (typeof u === "string" ? u.trim() : ""))
+            .filter(u => u.length > 0);
+    } else {
+        urls = [];
+    }
     const isMine = (senderId === myId);
 
     const rowDiv = document.createElement("div");

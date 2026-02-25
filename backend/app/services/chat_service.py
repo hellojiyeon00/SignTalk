@@ -287,26 +287,40 @@ class ChatService:
         Returns:
             list: [{"message", "sender", "sender_name", "date"}, ...]
         """
-        # 영상 히스토리 저장을 위해 수정합니다. (소영)
+        # history_sql = text("""
+        #     SELECT T.message, M.member_id, M.full_name, T.talk_date
+        #     FROM multicampus_schema.talk T
+        #     JOIN multicampus_schema.member M ON T.member_no = M.member_no
+        #     WHERE T.talk_room_id = :r_id
+        #     ORDER BY T.talk_date ASC
+        # """)
         history_sql = text("""
             SELECT
                 T.message,
                 M.member_id,
                 M.full_name,
                 T.talk_date,
-                (
-                    SELECT ARRAY_AGG(BB.url_path ORDER BY BB.seq)
-                    FROM multicampus_schema.talk_detail BB
-                    WHERE BB.talk_room_id = T.talk_room_id
-                    AND BB.member_no = T.member_no
-                    AND BB.talk_date = T.talk_date
-                ) AS urls
+                COALESCE(D.urls, ARRAY[]::text[]) AS urls
             FROM multicampus_schema.talk T
-            JOIN multicampus_schema.member M ON T.member_no = M.member_no
+            JOIN multicampus_schema.member M
+            ON T.member_no = M.member_no
+            LEFT JOIN (
+                SELECT
+                    talk_room_id,
+                    member_no,
+                    talk_date,
+                    ARRAY_AGG(url_path ORDER BY word_order_no)
+                    FILTER (WHERE url_path IS NOT NULL) AS urls
+                FROM multicampus_schema.talk_detail
+                GROUP BY talk_room_id, member_no, talk_date
+            ) D
+            ON D.talk_room_id = T.talk_room_id
+            AND D.member_no    = T.member_no
+            AND D.talk_date    = T.talk_date
             WHERE T.talk_room_id = :r_id
             ORDER BY T.talk_date ASC
         """)
-        
+
         results = db.execute(history_sql, {"r_id": room_id}).fetchall()
         
         return [

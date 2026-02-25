@@ -29,7 +29,7 @@ load_dotenv()
 
 # Logging init (app 생성 전에 1회)
 setup_logging(
-    log_dir=os.getenv("LOG_DIR", "logs"),
+    log_dir=os.getenv("LOG_DIR"),
     log_file=os.getenv("LOG_FILE", "model_server.log"),
     level=os.getenv("LOG_LEVEL", "INFO")
 )

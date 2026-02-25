@@ -10,7 +10,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OPS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PID_DIR="${OPS_DIR}/pids"
-LOG_DIR="${OPS_DIR}/logs"
+LOG_DIR="${LOG_DIR:-/home/lab06/logs/signtalk}"
+export LOG_DIR
 
 PID_FILE="${PID_DIR}/model_server.pid"
 LOG_FILE="${LOG_DIR}/model_server.out"

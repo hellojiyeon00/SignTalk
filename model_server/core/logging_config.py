@@ -14,10 +14,24 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+def _resolve_log_dir(log_dir: str | None) -> str:
+    """
+    로그 디렉토리 결정
+
+    우선순위:
+    1) setup_logging 인자
+    2) 환경변수 LOG_DIR
+    3) 기본값: /home/lab06/logs/signtalk (프로젝트 외부)
+    """
+    base = (log_dir or os.getenv("LOG_DIR") or "/home/lab06/logs/signtalk").strip()
+    path = os.path.abspath(base)
+    Path(path).mkdir(parents=True, exist_ok=True)
+    return path
+
 
 def setup_logging(
         *,
-        log_dir: str = "logs",
+        log_dir: str | None = None,
         log_file: str = "model_server.log",
         level: str | int = "INFO"
 ) -> None:
@@ -40,8 +54,8 @@ def setup_logging(
 
     root.setLevel(level_value)
 
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    file_path = os.path.join(log_dir, log_file)
+    resolved_log_dir = _resolve_log_dir(log_dir)
+    file_path = os.path.join(resolved_log_dir, log_file)
 
     formatter = logging.Formatter(
         fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -68,3 +82,7 @@ def setup_logging(
 
     # 중복 설정 방지 플래그
     root._model_server_logging_configured = True
+
+# log_dir를 넘기지 않으면 무조건 /home/lab06/logs/signtalk 사용
+# LOG_DIR 환경변수가 있으면 그 값 우선
+# 더 이상 프로젝트 내부 logs/ 생성/갱신 없음
