@@ -117,6 +117,15 @@ function connectDisasterSSE() {
         // keep-alive 메시지, 로그 출력 안 함
     });
     
+    // shutdown 이벤트: 서버가 중복 연결을 감지했을 때
+    disasterEventSource.addEventListener('shutdown', (event) => {
+        console.log("🔄 [SSE] 서버가 중복 연결을 감지했습니다. 이 연결을 종료합니다.");
+        if (disasterEventSource) {
+            disasterEventSource.close();
+            disasterEventSource = null;
+        }
+    });
+    
     // 오류 처리 (자동 재연결)
     disasterEventSource.onerror = (error) => {
         console.error("❌ [SSE] 재난문자 스트림 오류:", error);
@@ -391,3 +400,12 @@ function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, d
     // 새 문자가 오면 스크롤 맨 아래로 내리기
     msgBox.scrollTop = msgBox.scrollHeight;
 }
+
+// ======== 브라우저 종료/새로고침 시 SSE 연결 해제 ========
+window.addEventListener('beforeunload', () => {
+    // 브라우저가 닫히거나 새로고침될 때 SSE 연결을 안전하게 해제하여 서버 리소스 낭비 방지
+    if (disasterEventSource) {
+        disasterEventSource.close();
+        console.log("🔌 [브라우저 종료/새로고침] SSE 연결을 안전하게 해제했습니다.");
+    }
+});
