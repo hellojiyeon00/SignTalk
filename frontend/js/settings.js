@@ -49,7 +49,7 @@ function closeSettings() {
 async function goToProfileEdit() {
     /* 프로필 수정 화면으로 이동 */
     try {
-        const res = await fetch(`${BASE_URL}/auth/me?user_id=${myId}`);
+        const res = await authFetch(`${BASE_URL}/auth/me`);
         if (!res.ok) throw new Error("정보 로딩 실패");
         
         const data = await res.json();
@@ -82,7 +82,7 @@ async function updateMember() {
     };
 
     try {
-        const res = await fetch(`${BASE_URL}/auth/me`, {
+        const res = await authFetch(`${BASE_URL}/auth/me`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(updateData)
@@ -111,7 +111,7 @@ async function deleteMember() {
     if (!confirm("정말로 탈퇴하시겠습니까?\n탈퇴 후에는 복구할 수 없습니다.")) return;
     
     try {
-        const res = await fetch(`${BASE_URL}/auth/me?user_id=${myId}`, {
+        const res = await authFetch(`${BASE_URL}/auth/me`, {
             method: "DELETE"
         });
         
@@ -145,7 +145,7 @@ async function goToFriendManage() {
 async function loadFriendList() {
     /* 친구 목록 로드 */
     try {
-        const res = await fetch(`${BASE_URL}/chat/friends?user_id=${myId}`);
+        const res = await authFetch(`${BASE_URL}/chat/friends`);
         if (!res.ok) throw new Error("친구 목록 로딩 실패");
         
         const friends = await res.json();

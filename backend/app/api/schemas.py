@@ -37,6 +37,11 @@ class RoomCreateRequest(BaseModel):
     target_id: str
 
 
+class ReadMessagesRequest(BaseModel):
+    """메시지 읽음 처리 요청"""
+    room_id: int
+
+
 # 응답 스키마
 class MessageResponse(BaseModel):
     """기본 메시지 응답"""

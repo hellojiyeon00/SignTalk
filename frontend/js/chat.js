@@ -137,8 +137,10 @@ socket.on("receive_message", (data) => {
             
             // 즉시 읽음 처리 API 호출
             if (currentRoomId && currentRoomName) {
-                fetch(`${BASE_URL}/chat/read?room_id=${currentRoomId}&user_id=${myId}`, {
-                    method: "POST"
+                authFetch(`${BASE_URL}/chat/read`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ room_id: currentRoomId })
                 }).then(() => {
                     console.log("✅ [즉시 읽음] 현재 채팅방 메시지 읽음 처리 완료");
                     // 발신자에게 읽음 알림 전송
@@ -194,7 +196,7 @@ socket.on("messages_read", (data) => {
 async function fetchMyFriends() {
     /* 내 친구 목록 가져오기 */
     try {
-        const response = await fetch(`${BASE_URL}/chat/list?user_id=${myId}`);
+        const response = await authFetch(`${BASE_URL}/chat/list`);
         const friends = await response.json();
         
         const listContainer = document.getElementById("friendList");
@@ -422,7 +424,7 @@ async function addFriend(targetId) {
     if(!confirm(`'${targetId}'님을 친구로 추가하시겠습니까?`)) return;
 
     try {
-        const response = await fetch(`${BASE_URL}/chat/room`, {
+        const response = await authFetch(`${BASE_URL}/chat/room`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ my_id: myId, target_id: targetId })
@@ -453,7 +455,7 @@ async function startChat(friend, clickedElement) {
 
     try {
         // 방 번호 조회/생성
-        const roomRes = await fetch(`${BASE_URL}/chat/room`, {
+        const roomRes = await authFetch(`${BASE_URL}/chat/room`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ my_id: myId, target_id: friend.user_id })
@@ -463,8 +465,10 @@ async function startChat(friend, clickedElement) {
         
         // 메시지 읽음 처리
         try {
-            await fetch(`${BASE_URL}/chat/read?room_id=${currentRoomId}&user_id=${myId}`, {
-                method: "POST"
+            await authFetch(`${BASE_URL}/chat/read`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ room_id: currentRoomId })
             });
             console.log("✅ 메시지 읽음 처리 완료");
             // 친구 목록 새로고침 (읽지 않은 메시지 개수 업데이트)
@@ -494,7 +498,7 @@ async function startChat(friend, clickedElement) {
         console.log(`🏠 [Socket] 방 입장: ${currentRoomName} (ID: ${currentRoomId})`);
 
         // 과거 대화 내역 로드
-        const historyRes = await fetch(`${BASE_URL}/chat/history/${currentRoomId}?user_id=${myId}`);
+        const historyRes = await authFetch(`${BASE_URL}/chat/history/${currentRoomId}`);
         const historyArr = await historyRes.json();
 
         historyArr.forEach(chat => {
