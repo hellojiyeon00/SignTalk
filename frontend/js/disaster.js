@@ -82,6 +82,13 @@ function connectDisasterSSE() {
             return; // 필터링: 처리 중단
         }
         
+        // 🔔 재난문자 알림 설정 확인
+        const disasterNotificationEnabled = localStorage.getItem("disasterNotificationEnabled") !== "false";
+        if (!disasterNotificationEnabled) {
+            console.log("🔇 [알림] 재난문자 알림이 비활성화되어 있습니다.");
+            return; // 알림 비활성화 시 아무것도 표시하지 않음
+        }
+        
         // 최신 재난문자 등급 저장 및 개수 증가
         latestDisasterType = data.type_code;
         unreadDisasterCount++;
