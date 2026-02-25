@@ -18,6 +18,7 @@ function openSettings() {
     document.getElementById("settingsEditProfile").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "none";
     document.getElementById("settingsLocationSettings").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "none";
     modal.style.display = "flex";
 }
 
@@ -27,6 +28,7 @@ function showSettingsMenu() {
     document.getElementById("settingsEditProfile").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "none";
     document.getElementById("settingsLocationSettings").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "none";
 }
 
 function closeSettings() {
@@ -37,6 +39,7 @@ function closeSettings() {
     document.getElementById("settingsEditProfile").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "none";
     document.getElementById("settingsLocationSettings").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "none";
 }
 
 // ==========================================
@@ -57,6 +60,8 @@ async function goToProfileEdit() {
 
         document.getElementById("settingsMenu").style.display = "none";
         document.getElementById("settingsEditProfile").style.display = "block";
+        document.getElementById("settingsLocationSettings").style.display = "none";
+        document.getElementById("settingsNotification").style.display = "none";
     } catch (e) {
         alert("정보를 불러올 수 없습니다.");
         console.error(e);
@@ -131,7 +136,8 @@ async function goToFriendManage() {
     /* 친구 목록 관리 화면으로 이동 */
     document.getElementById("settingsMenu").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "block";
-    
+    document.getElementById("settingsLocationSettings").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "none";    
     // 친구 목록 로드
     await loadFriendList();
 }
@@ -271,6 +277,7 @@ function goToLocationSettings() {
     /* GPS 위치 설정 화면으로 이동 */
     document.getElementById("settingsMenu").style.display = "none";
     document.getElementById("settingsLocationSettings").style.display = "block";
+    document.getElementById("settingsNotification").style.display = "none";
     
     // 저장된 설정 불러오기
     loadLocationSettings();
@@ -552,6 +559,43 @@ function saveManualLocation() {
     } else {
         alert("위치가 저장되었으나 시/도 정보를 인식하지 못했습니다.\n재난 필터링이 작동하지 않을 수 있습니다.");
         console.log("⚠️ 수동 위치 저장 (필터링 불가):", location);
+    }
+}
+
+// ==========================================
+// 알림 설정
+// ==========================================
+
+function goToNotificationSettings() {
+    /* 알림 설정 화면으로 이동 */
+    document.getElementById("settingsMenu").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "block";
+    
+    // 저장된 설정 불러오기
+    loadNotificationSettings();
+}
+
+function loadNotificationSettings() {
+    /* localStorage에서 알림 설정 불러오기 */
+    const disasterEnabled = localStorage.getItem("disasterNotificationEnabled") !== "false";
+    document.getElementById("disasterNotificationToggle").checked = disasterEnabled;
+    
+    console.log("✅ 알림 설정 로드:", { disaster: disasterEnabled });
+}
+
+function toggleDisasterNotification() {
+    /* 재난문자 알림 on/off */
+    const toggle = document.getElementById("disasterNotificationToggle");
+    const enabled = toggle.checked;
+    
+    localStorage.setItem("disasterNotificationEnabled", enabled);
+    
+    if (enabled) {
+        console.log("✅ 재난문자 알림 활성화");
+        alert("재난문자 알림이 활성화되었습니다.");
+    } else {
+        console.log("❌ 재난문자 알림 비활성화");
+        alert("재난문자 알림이 비활성화되었습니다.\n⚠️ 긴급 재난 상황을 놓칠 수 있으니 주의하세요!");
     }
 }
 
