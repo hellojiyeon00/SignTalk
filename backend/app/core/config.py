@@ -20,12 +20,6 @@ class Settings(BaseSettings):
     REDIS_HOST: str
     REDIS_PORT: str
 
-    # HDFS 설정
-    HDFS_USER: str
-    HDFS_PASSWORD: str
-    HDFS_HOST: str
-    HDFS_PORT: str
-
     # JWT 설정
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
@@ -39,11 +33,6 @@ class Settings(BaseSettings):
     def REDIS_URL(self) -> str:
         """Redis 연결 URL 생성"""
         return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}"
-
-    @property
-    def HDFS_URL(self) -> str:
-        """HDFS 연결 URL 생성"""
-        return f"http://{self.HDFS_HOST}:{self.HDFS_PORT}"
 
     # .env 파일 경로 계산 (backend/app/core -> backend)
     _current_file = os.path.abspath(__file__)

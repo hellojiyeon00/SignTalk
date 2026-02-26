@@ -9,7 +9,6 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.core.redis_client import get_redis, close_redis
-from app.core.hdfs_client import get_hdfs
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.sockets import sio
@@ -29,16 +28,6 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Redis 연결됨")
     except Exception as e:
         logger.error(f"❌ Redis 연결 실패: {e}")
-        raise
-
-    # HDFS
-    hdfs = await get_hdfs()  # HDFS 연결
-    # 연결 확인
-    try:
-        hdfs.content('/')
-        logger.info("✅ HDFS 연결됨")
-    except Exception as e:
-        logger.error(f"❌ HDFS 연결 실패: {e}")
         raise
 
     yield

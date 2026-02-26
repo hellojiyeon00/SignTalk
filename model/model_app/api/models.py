@@ -7,8 +7,3 @@ router = APIRouter()
 @router.post("/sign2text")
 async def sign2text(data: dict = Body(...)):
     return await transfer_sign2gloss(data)
-
-@router.post("/text2sign")
-async def text2gloss(data: dict = Body(...)):
-    # 수신 확인
-    return {"ok": True}
