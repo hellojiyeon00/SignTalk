@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 
 from app.core.database import get_db
-from app.api.schemas import UserSignup, UserLogin, UserUpdate, MessageResponse, TokenResponse
+from app.api.schemas import UserSignup, UserLogin, UserUpdate, MessageResponse, TokenResponse, RefreshTokenRequest
 from app.core.config import settings
 from app.services.auth_service import AuthService
 
@@ -70,7 +70,21 @@ def create_access_token(data: dict) -> str:
     
     # 2. 만료 시간 설정
     expire = datetime.utcnow() + timedelta(minutes=30)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
+    
+    # 3. JWT 토큰 생성
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_refresh_token(data: dict) -> str:
+    """리프레시 토큰 생성 (7일 유효)"""
+    
+    # 1. 토큰에 담을 데이터 복사
+    to_encode = data.copy()
+    
+    # 2. 만료 시간 설정 (7일)
+    expire = datetime.utcnow() + timedelta(days=7)
+    to_encode.update({"exp": expire, "type": "refresh"})
     
     # 3. JWT 토큰 생성
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
@@ -109,17 +123,88 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
             detail="아이디 또는 비밀번호가 틀렸습니다."
         )
 
-    # 사용자 인증 성공 시 JWT 액세스 토큰 생성 (user[0]: user_id)
+    # 사용자 인증 성공 시 JWT 액세스 토큰 및 리프레시 토큰 생성 (user[0]: user_id)
     access_token = create_access_token(data={"sub": user[0]})
+    refresh_token = create_refresh_token(data={"sub": user[0]})
     
     # 로그인 성공 시 토큰과 사용자 정보를 반환
     return {
         "message": "로그인 성공!",
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user_id": user[0],
         "user_name": user[1]
     }
+
+
+# @router.post("/refresh"): POST로 요청하면 리프레시 토큰으로 새 액세스 토큰 발급
+@router.post("/refresh")
+def refresh_access_token(
+    request: RefreshTokenRequest,
+    db: Session = Depends(get_db)
+):
+    """리프레시 토큰으로 새 액세스 토큰 발급
+    
+    Args:
+        request: 리프레시 토큰을 담은 요청
+        
+    Returns:
+        dict: 새 액세스 토큰과 사용자 정보
+        
+    Raises:
+        HTTPException: 리프레시 토큰이 유효하지 않거나 만료된 경우
+    """
+    try:
+        # 1. 리프레시 토큰 디코딩 및 검증
+        payload = jwt.decode(
+            request.refresh_token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        
+        # 2. 토큰 타입 확인 (refresh 토큰인지 검증)
+        token_type = payload.get("type")
+        if token_type != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="유효하지 않은 리프레시 토큰입니다."
+            )
+        
+        # 3. 토큰에서 user_id 추출
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="유효하지 않은 토큰입니다."
+            )
+        
+        # 4. 사용자 정보 확인 (DB에 존재하는 사용자인지 검증)
+        user = AuthService.get_user_info(db, user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="사용자를 찾을 수 없습니다."
+            )
+        
+        # 5. 새 액세스 토큰 생성
+        new_access_token = create_access_token(data={"sub": user_id})
+        
+        # 6. 새 액세스 토큰 반환
+        return {
+            "message": "토큰이 갱신되었습니다.",
+            "access_token": new_access_token,
+            "token_type": "bearer",
+            "user_id": user_id,
+            "user_name": user[1]
+        }
+        
+    except JWTError as e:
+        # 토큰 만료, 서명 불일치, 형식 오류 등
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="리프레시 토큰이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요."
+        )
 
 
 # @router.get("/me"): GET으로 요청하면 내 프로필 정보 조회 (JWT 인증 필수)
