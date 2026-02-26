@@ -8,17 +8,12 @@ import httpx
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 from fastapi.concurrency import run_in_threadpool
-<<<<<<< HEAD
-
-from app.core.database import SessionLocal
-from app.services.sign_service import call_sign2text
-=======
 from jose import jwt, JWTError
 
 from app.core.database import SessionLocal
-from app.services.sign_service import transfer_sign2gloss
+from app.services.sign_service import call_sign2text
 from app.core.config import settings
->>>>>>> origin/feature/chat
+
 
 # 로거 설정
 logger = logging.getLogger("socket")
@@ -244,24 +239,11 @@ async def handle_send_landmarks(sid, data):
     # 서비스 호출 (AI 모델 예측 및 단어 추출)
     sign_data = await call_sign2text(data)
 
-<<<<<<< HEAD
     if sign_data is not None:
         room_id = data.get("room_id")
         room_name = data.get("room")
         sender_id = data.get("username")
         msg = sign_data["message"]
-=======
-    """메시지 전송 처리
-    
-    1. DB에 메시지 저장
-    2. 같은 방에 있는 모든 클라이언트에게 브로드캐스트
-    3. 상대방의 개인 알림 방으로도 알림 전송
-    """
-    room_id = data.get("room_id")
-    room_name = data.get("room")
-    sender_id = data.get("username")
-    msg = msg
->>>>>>> origin/feature/chat
 
         if room_id and sender_id and msg:
             try:
@@ -277,12 +259,6 @@ async def handle_send_landmarks(sid, data):
                         "time": sign_data["time"]
                     }
                 
-<<<<<<< HEAD
-                    await sio.emit("receive_message", payload, room=room_name)
-
-            except Exception as e:
-                logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
-=======
                 # 1. 같은 방에 있는 사용자들에게 메시지 전송
                 await sio.emit("receive_message", payload, room=room_name)
                 
@@ -296,6 +272,5 @@ async def handle_send_landmarks(sid, data):
                     }, room=f"user_{receiver_id}")
                     logger.info(f"🔔 [알림 전송] {sender_id} -> user_{receiver_id}")
                 
-        except Exception as e:
-            logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
->>>>>>> origin/feature/chat
+            except Exception as e:
+                logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
