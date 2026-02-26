@@ -1,23 +1,28 @@
 # =========================
-# Environment
+# Environment Variables
 # =========================
 .env
 .env.*
-*.env
+!.env.example
 
-# Python cache
+# =========================
+# Python Cache
+# =========================
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments
+# =========================
+# Virtual Environments
+# =========================
 venv/
 .venv/
 env/
 ENV/
+conda-meta/
 
 # =========================
-# Model checkpoints / weights
+# Model Weights / Checkpoints
 # =========================
 assets/
 *.bin
@@ -27,20 +32,46 @@ assets/
 *.safetensors
 *.onnx
 
-# HuggingFace cache
+# =========================
+# HuggingFace / Transformers Cache
+# =========================
 .cache/
 .huggingface/
 transformers_cache/
 
 # =========================
-# Logs
+# Logs (including ops)
 # =========================
 *.log
 logs/
 log/
+ops/logs/
 
 # =========================
-# OS files
+# Runtime Files
+# =========================
+*.pid
+*.sock
+ops/pids/
+
+# =========================
+# Test / Coverage
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# =========================
+# Temporary Files
+# =========================
+*.tmp
+*.temp
+*~
+
+# =========================
+# OS
 # =========================
 .DS_Store
 Thumbs.db
@@ -50,22 +81,3 @@ Thumbs.db
 # =========================
 .vscode/
 .idea/
-
-# =========================
-# Uvicorn / runtime
-# =========================
-*.pid
-*.sock
-
-# =========================
-# Test / coverage
-# =========================
-.coverage
-htmlcov/
-.pytest_cache/
-
-# =========================
-# Temporary files
-# =========================
-*.tmp
-*.temp

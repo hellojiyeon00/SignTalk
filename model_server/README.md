@@ -1,112 +1,233 @@
-# 📦 Model Server 구조
+# 🚀 Model Server (Inference Only)
 
-`model_server/`는 멀티 모델 단일 엔트리 구조로 설계되어 있습니다.  
-FastAPI 하나로 여러 모델을 task 기반으로 분기 처리합니다.
-
----
-
-## 📁 Directory Structure
-
-```
-model_server/
-│
-├── main.py
-│   # FastAPI 엔트리
-│   # POST /infer/{task}
-│   # task 문자열만 보고 registry에서 핸들러 호출
-│   #
-│   # 예) task: "kobart" | "lstm" | "fasttext" | "llm"
-│
-├── registry.py
-│   # task → handler 함수 매핑 테이블
-│   # 예) HANDLERS = {"kobart": kobart.infer, "lstm": lstm.infer, ...}
-│   # 모델 추가/삭제 시 이 파일만 수정하면 됨
-│
-├── models/
-│   ├── kobart.py
-│   │   # KoBART 로드 (체크포인트 / 토크나이저)
-│   │   # infer(text) -> gloss(str or tokens)
-│   │   # 전역 캐시로 1회 로드 (프로세스 내)
-│   │
-│   ├── lstm.py
-│   │   # LSTM 로드 (.pt / .pth)
-│   │   # infer(input) -> output
-│   │
-│   ├── fasttext.py
-│   │   # FastText 모델 로드 (.bin)
-│   │   # infer(text) -> (label / score or embedding)
-│   │
-│   └── llm.py
-│       # LLM 호출 래퍼
-│       # - 내부에 LLM이 뜨는 구조면: 로드 + infer
-│       # - 외부 API 호출이면: 요청/응답 파싱 + timeout/retry
-│
-├── assets/
-│   ├── kobart/        # KoBART checkpoint 디렉토리 (예: checkpoint-17000/)
-│   ├── lstm/          # LSTM weight 파일 (.pt / .pth)
-│   ├── fasttext/      # fastText .bin 파일
-│   └── llm/           # (선택) 로컬 LLM weight 또는 prompt 템플릿 등
-│
-└── requirements.txt
-    # fastapi
-    # uvicorn
-    # torch
-    # transformers
-    # fasttext (또는 gensim / fasttext-wheel)
-    # 기타 의존성
-```
+부트캠프 프로젝트의 **모델 전용 추론 서버**입니다.  
+FastAPI 기반 단일 엔트리 구조이며, Service Layer와 완전히 분리되어 있습니다.
 
 ---
 
-## 🧠 설계 철학
+# 🧠 Architecture Overview
 
-- **Single Entry Point**
-  - 모든 모델 호출은 `/infer/{task}` 하나로 통일
-- **Registry 기반 분기**
-  - 모델 추가 시 `models/`에 파일 추가
-  - `registry.py`에 핸들러 등록만 하면 확장 완료
-- **모델 1회 로드**
-  - 프로세스 시작 시 1회 로드 → 재요청 시 재사용
-- **모듈 단위 독립성**
-  - 각 모델 파일은 `infer()` 인터페이스만 맞추면 됨
+- Single Entry Point: `POST /infer/{task}`
+- Registry 기반 모델 분기
+- 모델 Lazy Loading (최초 요청 시 로드)
+- GPU 메모리 보호 전략 적용
+- Service ↔ Model 완전 분리
 
 ---
 
-## 🚀 API 예시
+# 📁 Directory Structure
 
-```
-POST /infer/kobart
-{
-  "text": "안녕하세요"
-}
-```
-
-```
-POST /infer/lstm
-{
-  "payload": {...}
-}
-```
+    model_server/
+    │
+    ├── main.py
+    │   # FastAPI 엔트리 포인트
+    │   # POST /infer/{task} 라우팅 담당
+    │   # 요청/응답 공통 스키마 처리
+    │
+    ├── registry.py
+    │   # task → handler 매핑 테이블
+    │   # 모델 추가 시 이 파일만 수정
+    │
+    ├── models/
+    │   # 모델 로직 모듈 디렉토리
+    │   │
+    │   ├── kobart/
+    │   │   ├── loader.py        # KoBART 모델/토크나이저 로드
+    │   │   ├── infer.py         # text → gloss 추론
+    │   │   └── preprocess.py    # 전처리/후처리
+    │   │
+    │   └── fasttext/
+    │       ├── loader.py        # fastText 모델 로드
+    │       ├── recommend.py     # 유사 단어 추천 로직
+    │       └── ...
+    │
+    ├── assets/
+    │   # 모델 weight 저장 디렉토리 (Git 추적 제외)
+    │   │
+    │   ├── kobart/              # KoBART checkpoint
+    │   └── fasttext/            # fastText .bin 파일
+    │
+    ├── ops/
+    │   # 운영 관련 디렉토리
+    │   │
+    │   ├── run/                 # 서버 실행 스크립트
+    │   ├── logs/                # 로그 파일 저장 위치
+    │   └── pids/                # 프로세스 PID 관리
+    │
+    ├── .env                     # 환경 변수 파일 (Git 제외)
+    ├── requirements.txt         # Python 의존성
+    └── README.md                # 현재 문서
 
 ---
 
-## ✅ 모델 추가 방법
+# 🐍 Development Environment
 
-1. `models/new_model.py` 생성
-2. `infer()` 함수 구현
-3. `registry.py`에 핸들러 등록
+- Python 3.9.x
+- Conda 환경 사용
 
-```python
-HANDLERS = {
-    "kobart": kobart.infer,
-    "lstm": lstm.infer,
-    "fasttext": fasttext.infer,
-    "llm": llm.infer,
-    "new_model": new_model.infer,
-}
-```
+## 1️⃣ Conda 환경 생성
+
+    conda create -n model_server python=3.9
+    conda activate model_server
 
 ---
 
-이 구조는  
-**멀티 모델 환경에서 유지보수성과 확장성을 극대화하기 위한 설계**입니다.
+## 2️⃣ PyTorch 설치 (GPU 환경 예시: CUDA 11.6)
+
+    pip install torch==1.12.0+cu116 \
+      -f https://download.pytorch.org/whl/torch_stable.html
+
+⚠ 반드시 서버 CUDA 버전에 맞게 설치할 것.
+
+CUDA 확인:
+
+    nvidia-smi
+
+---
+
+## 3️⃣ Requirements 설치
+
+    pip install -r requirements.txt
+
+---
+
+# 📦 requirements.txt (Inference 전용)
+
+    # Deep Learning
+    torch==1.12.0+cu116
+    transformers==4.26.1
+    sentencepiece
+    numpy==1.26.4
+    PyYAML
+
+    # API Server
+    fastapi
+    uvicorn
+    httpx
+
+※ model_server는 추론 전용이므로 DB 관련 라이브러리는 포함하지 않음.
+
+---
+
+# ⚙️ Environment Variables (.env 권장)
+
+위치:
+
+    model_server/.env
+
+예시:
+
+    KOBART_CHECKPOINT=/home/ubuntu/model_server/assets/kobart/checkpoint-17000
+    DEVICE=auto
+    MAX_NEW_TOKENS=64
+    NUM_BEAMS=4
+    MODEL_SERVER_TIMEOUT_SEC=10
+
+⚠ `.env`와 `assets/`는 Git에 올리지 말 것.
+
+---
+
+# 🚀 Server 실행
+
+## Production (권장)
+
+    uvicorn main:app \
+        --host 0.0.0.0 \
+        --port 8001 \
+        --workers 1
+
+⚠ GPU 환경에서는 workers=1 유지 권장  
+⚠ 운영 환경에서 --reload 사용 금지
+
+---
+
+# 📡 API Contract
+
+## Endpoint
+
+    POST /infer/{task}
+
+## Supported Task
+
+- kobart
+- fasttext
+
+---
+
+## 📥 Request (Minimum)
+
+    {
+      "text": "안녕하세요"
+    }
+
+## 📥 Request (With Options)
+
+    {
+      "text": "안녕하세요",
+      "payload": {
+        "top_k": 1,
+        "max_new_tokens": 64,
+        "num_beams": 4
+      }
+    }
+
+---
+
+## 📤 Response (Example)
+
+    {
+      "ok": true,
+      "task": "kobart",
+      "result": {
+        "gloss": "...",
+        "meta": {
+          "latency_ms": 123,
+          "device": "cuda"
+        }
+      }
+    }
+
+---
+
+# 🧠 Production Design Principles
+
+## 1️⃣ Single Process
+
+- uvicorn worker 1개 유지
+- GPU 모델은 단일 프로세스에서 관리
+
+## 2️⃣ Lazy Loading
+
+- 서버 시작 시 모든 모델 preload ❌
+- 최초 요청 시 load()
+- 이후 전역 캐시 유지
+
+## 3️⃣ GPU 전략
+
+- KoBART → GPU 우선
+- FastText → CPU 고정
+- CUDA OOM 발생 시:
+  - batch 감소
+  - LLM 분리
+  - CPU fallback 고려
+
+---
+
+# 🔐 Security
+
+- EC2 보안 그룹에서 8001 포트 제한
+- 내부 통신 전용이면 내부 IP 바인딩 고려
+- API Key는 반드시 `.env`로 관리
+
+---
+
+# 🏁 Summary
+
+본 Model Server는:
+
+- 멀티 모델 단일 엔트리 구조
+- Lazy Loading 기반
+- GPU 메모리 보호 전략 적용
+- Service Layer와 완전 분리
+
+를 목표로 설계된 **Inference 전용 FastAPI 서버**입니다.
