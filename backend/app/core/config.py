@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     # .env 파일 경로 계산 (backend/app/core -> backend)
     _current_file = os.path.abspath(__file__)
     _backend_root = os.path.dirname(os.path.dirname(os.path.dirname(_current_file)))
-    _env_file_path = os.path.join(_backend_root, ".env")
+    _project_root = os.path.dirname(_backend_root)
+    _env_file_path = os.path.join(_project_root, ".env")
 
     model_config = SettingsConfigDict(
         env_file=_env_file_path,

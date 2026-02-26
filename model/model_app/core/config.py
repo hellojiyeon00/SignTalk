@@ -28,10 +28,12 @@ class Settings(BaseSettings):
         """Redis 연결 URL 생성"""
         return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}"
 
-    # .env 파일 경로 계산 (model/app/core -> model)
+
+    # .env 파일 경로 계산 (backend/app/core -> backend)
     _current_file = os.path.abspath(__file__)
-    _model_root = os.path.dirname(os.path.dirname(os.path.dirname(_current_file)))
-    _env_file_path = os.path.join(_model_root, ".env")
+    _backend_root = os.path.dirname(os.path.dirname(os.path.dirname(_current_file)))
+    _project_root = os.path.dirname(_backend_root)
+    _env_file_path = os.path.join(_project_root, ".env")
 
     model_config = SettingsConfigDict(
         env_file=_env_file_path,
