@@ -6,12 +6,10 @@ import asyncio
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-<<<<<<< HEAD
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
-=======
-from fastapi.staticfiles import StaticFiles
->>>>>>> origin/feature/chat
+
 
 from app.core.redis_client import get_redis, close_redis
 from app.api.auth import router as auth_router
