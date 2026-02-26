@@ -237,6 +237,9 @@ body {
     flex-direction: column;
     max-width: 70%;
     position: relative;
+    /* 말풍선과 버튼 사이 간격 */
+    gap: 6px;
+    align-items: flex-start;
 }
 
 .message-content {
@@ -364,3 +367,83 @@ body {
 .modal-content h3 { margin-top: 0; margin-bottom: 20px; text-align: center; }
 .modal-content .input-group { margin-bottom: 15px; }
 .modal-content input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 5px; }
+
+/* video modal */
+.video-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.video-modal-overlay.is-open {
+  display: flex;
+}
+
+.video-modal {
+  background: #fff;
+  width: min(520px, 100%);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.video-modal-close {
+  border: 0;
+  background: #eee;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.video-modal-player {
+  width: 100%;
+  border-radius: 10px;
+  background: #000;
+  margin-top: 8px;
+}
+
+/* 말풍선 아래로 한 줄 내려서 버튼 배치 */
+.video-open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    background: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    white-space: nowrap;
+
+    /* 버튼이 말풍선 폭만큼 늘지 않게 */
+    width: fit-content;
+    max-width: 100%;
+}
+
+/* 버튼 좌/우 위치 미세 조정 */
+.message-other .video-open-btn { align-self: flex-start; }
+.message-mine .video-open-btn { align-self: flex-end; }
+.message-mine .video-open-btn { margin-right: 2px; }
+.message-other .video-open-btn { margin-left: 2px; }
+
+/* bubble + 버튼 세로 배치 */
+.message-bubble-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* 내 메시지는 오른쪽 정렬 */
+.message-mine .message-bubble-wrap {
+    align-items: flex-end;
+}
+
+/* 상대 메시지는 왼쪽 */
+.message-other .message-bubble-wrap {
+    align-items: flex-start;
+}
