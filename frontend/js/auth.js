@@ -75,6 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (response.ok) {
                     const data = await response.json();
                     localStorage.setItem("accessToken", data.access_token);
+                    localStorage.setItem("refreshToken", data.refresh_token);
                     localStorage.setItem("userId", userId);
                     localStorage.setItem("userName", data.user_name || userId);
                     window.location.href = "index.html";

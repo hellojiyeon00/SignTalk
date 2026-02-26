@@ -37,6 +37,11 @@ class RoomCreateRequest(BaseModel):
     target_id: str
 
 
+class ReadMessagesRequest(BaseModel):
+    """메시지 읽음 처리 요청"""
+    room_id: int
+
+
 # 응답 스키마
 class MessageResponse(BaseModel):
     """기본 메시지 응답"""
@@ -47,9 +52,15 @@ class TokenResponse(BaseModel):
     """로그인 성공 응답"""
     message: str
     access_token: str
+    refresh_token: str
     token_type: str
     user_id: str
     user_name: str
+
+
+class RefreshTokenRequest(BaseModel):
+    """토큰 갱신 요청"""
+    refresh_token: str
 
 
 class RoomResponse(BaseModel):

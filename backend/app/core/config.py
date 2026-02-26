@@ -22,11 +22,15 @@ class Settings(BaseSettings):
 
     # JWT 설정
     SECRET_KEY: str
-    ALGORITHM: str = "HS256"
+    ALGORITHM: str
     
     # Kakao API 설정
-    KAKAO_REST_API_KEY: str = "YOUR_KAKAO_REST_API_KEY_HERE"
+    KAKAO_REST_API_KEY: str 
 
+    # Kafka 설정
+    KAFKA_BOOTSTRAP_SERVERS: str
+    KAFKA_ENABLED: bool # Kafka 사용 여부
+    
     @property
     def DATABASE_URL(self) -> str:
         """SQLAlchemy 데이터베이스 연결 URL 생성"""
