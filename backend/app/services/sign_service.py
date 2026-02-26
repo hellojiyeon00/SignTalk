@@ -1,66 +1,93 @@
+import httpx
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi.concurrency import run_in_threadpool
+
+from app.services.redis_service import push_frame, get_frames, clear_session
 
 # 로거 설정
-logger = logging.getLogger("socket")
+logger = logging.getLogger("sign-service")
+logging.basicConfig(level=logging.INFO)
 
-# 유저별로 랜드마크 버퍼(Redis를 안 쓴다면 일단 전역 변수)
-user_landmarks_buffers = {}
-# 유저별 단어 버퍼(Redis를 안 쓴다면 일단 전역 변수)
-user_gloss_buffers = {}
+# 모델 서버 주소
+MODEL_API_URL = "http://127.0.0.1:8004/models/sign2text"
+# 하둡 서버 주소
+HADOOP_API_URL = "http://127.0.0.1:8005/hdfs/save_hdfs"
 
-gloss_dict = {i: f"단어 {i}" for i in range(100)}
-
-# 글로스 -> 문장 변환(LLM API 사용)
-async def transfer_gloss2text(gloss_list):
-    """
-    유저별 gloss_list를 LLM에 입력하여 문장 생성 및 반환
-    """
-    text = " ".join(gloss_list)
-    return text
-
-# 랜드마크 -> 글로스 변환(LSTM 모델 사용)
-async def transfer_sign2gloss(data):
+# 랜드마크 -> 텍스트 변환(모델 서버 전달)
+async def call_sign2text(data):
     """
     전달받은 landmarks를 모델에 넣고 gloss 반환
     """
     room_id = data.get("room_id")
-    room_name = data.get("room")
     sender_id = data.get("username")
     landmarks = data.get("message")
-    status = data.get("stopBtn") # True: 전송 종료, False: 전송 중
+    stop = data.get("status_stop") # True: 전송 종료, False: 전송 중
 
     # 종료 버튼(stopBtn) 눌렀을 때
-    if status:
-        gloss_list = user_gloss_buffers[sender_id]
-        print(gloss_list)
-        if not gloss_list:
-            print("인식된 단어가 없습니다.")
-        msg = await transfer_gloss2text(user_gloss_buffers[sender_id])
-        print(f"반환된 문장: {msg}")
+    if stop:
+        try:
+            timeout = httpx.Timeout(15.0, connect=5.0)  # 너무 오래 안 기다리게
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(MODEL_API_URL, json={"room_id": room_id, "username": sender_id})
+                
+                # 응답 상태 확인
+                if resp.status_code == 200:
+                    result = resp.json()
 
-        # 해당 유저의 저장소 초기화
-        user_landmarks_buffers[sender_id] = []
-        user_gloss_buffers[sender_id] = []
+                    # 모델 서버 응답 데이터 로그 출력
+                    # 모델 서버가 반환하는 형태: {"status": "ok", "gloss_sequence": [...], "korean_text": "..."}
+                    logger.info(f"✅ [Model Server] 응답 성공")
+                    logger.info(f"📊 [Gloss Sequence] {result.get('gloss_sequence')}")
+                    logger.info(f"📝 [Korean Text] {result.get('korean_text')}")
 
-        return msg
+                    korean_text = result.get("korean_text")
+                    all_landmarks = await get_frames(room_id, sender_id)
+
+                    if korean_text and all_landmarks:
+                        # 한국 시간 (KST = UTC+9)
+                        KST = timezone(timedelta(hours=9))
+                        now_kst = datetime.now(KST).strftime("%H:%M")
+                        v_talk_date = datetime.now(KST).isoformat()
+
+                        # 하둡 전송
+                        hadoop_payload = {
+                            "v_member_no": sender_id,
+                            "v_talk_date": v_talk_date,
+                            "v_message": korean_text,
+                            "v_coordinates": all_landmarks
+                        }
+
+                        try:
+                            h_resp = await client.post(HADOOP_API_URL, json=hadoop_payload, timeout=10.0)
+                            
+                            if h_resp.status_code == 200:
+                                logger.info(f"✅ [Hadoop Server] {h_resp.json().get('status')}: {h_resp.json().get('detail')}")
+                            else:
+                                logger.error(f"❌ [Hadoop Server] 응답 에러: {h_resp.status_code}")
+
+                        except Exception as e:
+                            logger.error(f"❌ [Hadoop Server] 통신 실패: {e}")
+                        
+                        # 세션 정리
+                        await clear_session(room_id, sender_id)
+                        return {"message": korean_text, "time": now_kst}
+
+                else:
+                    logger.error(f"❌ [Model Server] 응답 실패 (Code: {resp.status_code})")
+                    # 세션 정리
+                    await clear_session(room_id, sender_id)
+                    return None
+
+        except httpx.ReadTimeout:
+            logger.error("❌ [Model Server] 응답 시간 초과 (Timeout)")
+
+        except Exception as e:
+            logger.error(f"❌ [Model Server] 통신 오류: {repr(e)}")
+
+        # 세션 정리
+        await clear_session(room_id, sender_id)
+        return None
     
-    # 유저 저장소 초기화
-    if sender_id not in user_landmarks_buffers:
-        user_landmarks_buffers[sender_id] = []
-    if sender_id not in user_gloss_buffers:
-        user_gloss_buffers[sender_id] = []
-
-    user_landmarks_buffers[sender_id].append(landmarks)
-    predicted_gloss = None
-
-    # [여기에 AI 모델 예측 로직 삽입]
-    # 예시 테스트용: 10프레임마다 가짜 단어 생성
-    if len(user_landmarks_buffers[sender_id]) % 10 == 0:
-        num = len(user_landmarks_buffers[sender_id]) // 10
-        predicted_gloss = gloss_dict[num]
-        print(predicted_gloss)
-    
-    if predicted_gloss:
-        user_gloss_buffers[sender_id].append(predicted_gloss)
+    # 프레임 저장
+    await push_frame(room_id, sender_id, landmarks)
+    return None
