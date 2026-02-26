@@ -222,3 +222,5 @@ pip-selfcheck.json
 .history
 .ionide
 
+#
+local_db/
