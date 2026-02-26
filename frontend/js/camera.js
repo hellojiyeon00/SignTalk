@@ -24,7 +24,7 @@ function initHolistic() {
     console.log("📷 [MediaPipe] Initialize MediaPipe")
     holistic = new Holistic({
         locateFile: file =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
+            `${CONFIG.MEDIAPIPE_CDN_BASE}/${file}`
     });
 
     holistic.setOptions({

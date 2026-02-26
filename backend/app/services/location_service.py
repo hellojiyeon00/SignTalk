@@ -33,7 +33,8 @@ class LocationService:
                 detail="Kakao API key not configured"
             )
         
-        url = "https://dapi.kakao.com/v2/local/geo/coord2address.json"
+        # Kakao API URL (환경 변수에서 로드)
+        url = settings.KAKAO_API_URL
         headers = {
             "Authorization": f"KakaoAK {kakao_api_key}"
         }

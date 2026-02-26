@@ -26,10 +26,15 @@ class Settings(BaseSettings):
     
     # Kakao API 설정
     KAKAO_REST_API_KEY: str 
+    KAKAO_API_URL: str
 
     # Kafka 설정
     KAFKA_BOOTSTRAP_SERVERS: str
     KAFKA_ENABLED: bool # Kafka 사용 여부
+    
+    # API 엔드포인트 설정
+    MODEL_API_URL: str  # 모델 서버 URL
+    HADOOP_API_URL: str  # Hadoop 서버 URL
     
     @property
     def DATABASE_URL(self) -> str:

@@ -3,15 +3,16 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from app.services.redis_service import push_frame, get_frames, clear_session
+from app.core.config import settings
 
 # 로거 설정
 logger = logging.getLogger("sign-service")
 logging.basicConfig(level=logging.INFO)
 
-# 모델 서버 주소
-MODEL_API_URL = "http://127.0.0.1:8004/models/sign2text"
-# 하둡 서버 주소
-HADOOP_API_URL = "http://127.0.0.1:8005/hdfs/save_hdfs"
+# 모델 서버 주소 (환경 변수에서 로드)
+MODEL_API_URL = settings.MODEL_API_URL
+# 하둡 서버 주소 (환경 변수에서 로드)
+HADOOP_API_URL = settings.HADOOP_API_URL
 
 # 랜드마크 -> 텍스트 변환(모델 서버 전달)
 async def call_sign2text(data):
