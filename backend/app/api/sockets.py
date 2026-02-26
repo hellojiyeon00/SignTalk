@@ -10,7 +10,6 @@ from sqlalchemy import text
 from fastapi.concurrency import run_in_threadpool
 
 from app.core.database import SessionLocal
-
 from app.services.sign_service import call_sign2text
 
 # 로거 설정
