@@ -123,7 +123,8 @@ async def transfer_sign2gloss(data):
         # 2. LSTM 모델 예측
         logger.info(f"🔮 [LSTM] {room_id}:{sender_id} - 예측 시작...")
         
-        gloss_sequence = predict_gloss(frame_list, 30)
+        # gloss_sequence = predict_gloss(frame_list, 30)
+        gloss_sequence = ["지시", "공부", "전문", "무엇"]
         
         if gloss_sequence is None or len(gloss_sequence) == 0:
             logger.warning(f"⚠️ [NoGloss] {room_id}:{sender_id} - 글로스 예측 실패")

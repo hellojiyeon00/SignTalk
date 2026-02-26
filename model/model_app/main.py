@@ -59,4 +59,4 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Model API", version="1.0", lifespan=lifespan)
 
 # API 라우터 등록
-app.include_router(model_router, prefix="/models", tags=["모델 전달"])
+app.include_router(model_router, prefix="/models", tags=["Sign2Text"])

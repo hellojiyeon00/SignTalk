@@ -1,6 +1,6 @@
 from hdfs import InsecureClient
 
-from app.core.config import settings
+from hadoop_app.core.config import settings
 
 # 전역 HDFS 클라이언트
 hdfs_client = None

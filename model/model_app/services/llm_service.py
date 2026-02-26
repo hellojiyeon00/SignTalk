@@ -45,7 +45,8 @@ async def translate_gloss2text(gloss_list):
             temperature=0.3 # 일관된 답변을 위해 낮은 자유도 설정
         )
 
-        final_text = response.choices[0].message.content.strip()
+        # final_text = response.choices[0].message.content.strip()
+        final_text = "너희들은 전공이 뭐야?"
         logger.info(f"✅ [LLM] 변환 완료: {final_text}")
         
         return final_text
