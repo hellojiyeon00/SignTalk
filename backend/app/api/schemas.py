@@ -52,9 +52,15 @@ class TokenResponse(BaseModel):
     """로그인 성공 응답"""
     message: str
     access_token: str
+    refresh_token: str
     token_type: str
     user_id: str
     user_name: str
+
+
+class RefreshTokenRequest(BaseModel):
+    """토큰 갱신 요청"""
+    refresh_token: str
 
 
 class RoomResponse(BaseModel):

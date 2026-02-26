@@ -5,8 +5,56 @@
 
 const API_BASE_URL = "http://localhost:8000";
 
+// 토큰 갱신 중 플래그 (중복 갱신 방지)
+let isRefreshing = false;
+let refreshPromise = null;
+
 /**
- * 인증 헤더를 포함한 fetch 요청
+ * 리프레시 토큰으로 새 액세스 토큰 발급
+ */
+async function refreshAccessToken() {
+    const refreshToken = localStorage.getItem("refreshToken");
+    
+    if (!refreshToken) {
+        throw new Error("리프레시 토큰이 없습니다.");
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ refresh_token: refreshToken })
+        });
+        
+        if (!response.ok) {
+            throw new Error("토큰 갱신 실패");
+        }
+        
+        const data = await response.json();
+        
+        // 새 액세스 토큰 저장
+        localStorage.setItem("accessToken", data.access_token);
+        localStorage.setItem("userId", data.user_id);
+        localStorage.setItem("userName", data.user_name);
+        
+        console.log("✅ [Auth] 토큰이 자동으로 갱신되었습니다.");
+        return data.access_token;
+        
+    } catch (error) {
+        console.error("❌ [Auth] 토큰 갱신 실패:", error);
+        // 리프레시 토큰도 만료된 경우 로그아웃
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("userId");
+        localStorage.removeItem("userName");
+        throw error;
+    }
+}
+
+/**
+ * 인증 헤더를 포함한 fetch 요청 (자동 토큰 갱신 지원)
  */
 async function authFetch(url, options = {}) {
     const token = localStorage.getItem("accessToken");
@@ -33,14 +81,36 @@ async function authFetch(url, options = {}) {
         headers
     });
     
-    // 401 Unauthorized 에러 처리 (토큰 만료 등)
+    // 401 Unauthorized 에러 처리 (토큰 만료)
     if (response.status === 401) {
-        alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("userId");
-        localStorage.removeItem("userName");
-        window.location.href = "login.html";
-        throw new Error("인증 실패");
+        try {
+            // 토큰 갱신 중복 방지
+            if (!isRefreshing) {
+                isRefreshing = true;
+                refreshPromise = refreshAccessToken().finally(() => {
+                    isRefreshing = false;
+                    refreshPromise = null;
+                });
+            }
+            
+            // 토큰 갱신 완료 대기
+            await refreshPromise;
+            
+            // 새 토큰으로 원래 요청 재시도
+            const newToken = localStorage.getItem("accessToken");
+            headers["Authorization"] = `Bearer ${newToken}`;
+            
+            return await fetch(url, {
+                ...options,
+                headers
+            });
+            
+        } catch (error) {
+            // 토큰 갱신 실패 시 로그인 페이지로 리다이렉트
+            alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
+            window.location.href = "login.html";
+            throw new Error("인증 실패");
+        }
     }
     
     return response;
