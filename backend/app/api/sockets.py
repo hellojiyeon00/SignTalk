@@ -7,10 +7,11 @@ import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 from fastapi.concurrency import run_in_threadpool
-
+from jose import jwt, JWTError
 
 from app.core.database import SessionLocal
 from app.services.sign_service import transfer_sign2gloss
+from app.core.config import settings
 
 # 로거 설정
 logger = logging.getLogger("socket")
@@ -21,9 +22,44 @@ sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
 
 
 @sio.event
-async def connect(sid, environ):
-    """클라이언트 연결"""
-    logger.info(f"✅ [Socket] 접속됨 | SID: {sid}")
+async def connect(sid, environ, auth):
+    """클라이언트 연결 (JWT 토큰 검증)"""
+    try:
+        # auth 딕셔너리에서 토큰 추출
+        token = None
+        if auth and isinstance(auth, dict):
+            token = auth.get("token")
+        
+        # 토큰이 없으면 연결 거부
+        if not token:
+            logger.warning(f"❌ [Socket] 토큰 없음 | SID: {sid}")
+            return False
+        
+        # JWT 토큰 검증
+        try:
+            payload = jwt.decode(
+                token,
+                settings.SECRET_KEY,
+                algorithms=[settings.ALGORITHM]
+            )
+            user_id = payload.get("sub")
+            
+            if user_id is None:
+                logger.warning(f"❌ [Socket] 토큰에 user_id 없음 | SID: {sid}")
+                return False
+            
+            # 세션에 user_id 저장 (나중에 사용 가능)
+            await sio.save_session(sid, {"user_id": user_id})
+            logger.info(f"✅ [Socket] 접속됨 (인증) | SID: {sid} | User: {user_id}")
+            return True
+            
+        except JWTError as e:
+            logger.warning(f"❌ [Socket] JWT 검증 실패 | SID: {sid} | Error: {e}")
+            return False
+    
+    except Exception as e:
+        logger.error(f"❌ [Socket] 연결 오류 | SID: {sid} | Error: {e}")
+        return False
 
 
 @sio.on("register_user")

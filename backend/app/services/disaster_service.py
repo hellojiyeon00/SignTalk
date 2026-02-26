@@ -185,6 +185,8 @@ class DisasterService:
     async def generate_disaster_stream(user_id: str, request):
         """[수정됨] 사용자 지정석(Dictionary) 방식의 SSE 스트림"""
         
+        logger.info(f"🔵 [SSE] generate_disaster_stream 시작 (user_id: {user_id})")
+        
         # 🌟 1. 이미 내 이름(user_id)으로 된 기존 연결(유령)이 있다면 강제로 종료 신호를 보냅니다.
         if user_id in connected_clients:
             logger.info(f"🔄 [SSE] 중복 접속 감지! 기존 유령 연결을 밀어냅니다. (user_id: {user_id})")
@@ -199,10 +201,14 @@ class DisasterService:
         logger.info(f"✅ [SSE] 클라이언트 연결됨 (현재 실제 접속자: {len(connected_clients)}명)")
         
         try:
+            loop_count = 0
             while True:
+                loop_count += 1
+                
                 # 사용자가 브라우저 창을 닫았는지 확인
-                if await request.is_disconnected():
-                    logger.info(f"👋 [SSE] 클라이언트 연결 종료 감지 (user_id: {user_id})")
+                is_disconnected = await request.is_disconnected()
+                if is_disconnected:
+                    logger.info(f"👋 [SSE] 클라이언트 연결 종료 감지 (user_id: {user_id}, loop: {loop_count})")
                     break
                 
                 try:
@@ -213,6 +219,7 @@ class DisasterService:
                         logger.info(f"🛑 [SSE] 새로고침으로 인해 이전 연결이 종료됩니다. (user_id: {user_id})")
                         break
                     
+                    logger.info(f"📤 [SSE] 재난문자 전송 (user_id: {user_id})")
                     yield {
                         "event": "disaster",
                         "id": disaster_data["id"],
@@ -220,6 +227,9 @@ class DisasterService:
                     }
                     
                 except asyncio.TimeoutError:
+                    # 1초마다 ping 전송 (연결 유지)
+                    if loop_count % 10 == 1:  # 10초마다 한 번만 로그
+                        logger.debug(f"🏓 [SSE] Ping 전송 (user_id: {user_id}, loop: {loop_count})")
                     yield {"event": "ping", "data": "keep-alive"}
                     
         except asyncio.CancelledError:

@@ -415,3 +415,15 @@ window.addEventListener('beforeunload', () => {
         console.log("🔌 [브라우저 종료/새로고침] SSE 연결을 안전하게 해제했습니다.");
     }
 });
+
+// ======== 페이지 로드 시 자동으로 SSE 연결 시작 ========
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log("✅ [재난문자] 페이지 로드 완료, SSE 연결 시작");
+        connectDisasterSSE();
+    });
+} else {
+    // 스크립트가 늦게 로드된 경우 즉시 실행
+    console.log("✅ [재난문자] SSE 연결 즉시 시작");
+    connectDisasterSSE();
+}
