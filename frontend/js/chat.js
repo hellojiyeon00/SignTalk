@@ -247,7 +247,20 @@ async function startChat(friend, clickedElement) {
                 }
             } catch (e) { }
 
-            // 수어 영상 표시 위해서 코드 추가 (소영)
+            // 수어 영상 히스토리 저장을 위해 추가 (소영)
+            // 히스토리 영상 보존: url_path(문자열) -> urls(배열)로 변환
+            let historyUrls = [];
+            if (Array.isArray(chat.urls) && chat.urls.length > 0) {
+                // 기존에 urls 배열에 내려오는 경우(호환)
+                historyUrls = chat.urls;
+            } else if (typeof chat.url_path === "string" && chat.url_path.trim().length > 0) {
+                // DB에서 STRING_AGG로 내려온 "a, b, c" 형태 처리
+                historyUrls = chat.url_path
+                    .split(",")
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            }
+
             displayMessage(
                 chat.sender,
                 chat.sender_name,
@@ -294,6 +307,15 @@ function sendMessage() {
 function displayMessage(senderId, senderName, msg, time, gloss = "", urls = [], miss = []) {
     /* 말풍선 렌더링 */
     const msgBox = document.getElementById("messages");
+
+    // urls 방어: null/undefined/빈문자 제거 (video.src 오류 방지)
+    if (Array.isArray(urls)) {
+        urls = urls
+            .map(u => (typeof u === "string" ? u.trim() : ""))
+            .filter(u => u.length > 0);
+    } else {
+        urls = [];
+    }
     const isMine = (senderId === myId);
 
     const rowDiv = document.createElement("div");
@@ -309,123 +331,145 @@ function displayMessage(senderId, senderName, msg, time, gloss = "", urls = [], 
     const bubbleDiv = document.createElement("div");
     bubbleDiv.className = "message-bubble";
     bubbleDiv.textContent = msg;
+    
+    const hasGloss = (typeof gloss === "string" && gloss.trim().length > 0);
+    const hasUrls = (Array.isArray(urls) && urls.length > 0);
+    const hasMiss = (Array.isArray(miss) && miss.length > 0);
+
+    // 말풍선 + 버튼을 묶는 래퍼 (버튼을 말풍선 아래로 내리기)
+    const bubbleWrap = document.createElement("div");
+    bubbleWrap.className = "message-bubble-wrap";
+
+    bubbleWrap.appendChild(bubbleDiv);
 
     const timeSpan = document.createElement("span");
     timeSpan.className = "message-time";
     timeSpan.textContent = time;
 
-    contentDiv.appendChild(bubbleDiv);
-    contentDiv.appendChild(timeSpan);
+    // urls (팝업 버튼) - 말풍선 바로 아래에 붙임(별도 요소)
+    if (hasUrls) {
+        const openBtn = document.createElement("button");
+        openBtn.type = "button";
+        openBtn.className = "video-open-btn";
+        openBtn.textContent = "🎬 영상 보기";
 
-    // gloss/urls/miss가 있을 때만 extra 영역 생성 (DOM 비대화 방지)
-    const hasGloss = (typeof gloss === "string" && gloss.trim().length > 0);
-    const hasUrls = (Array.isArray(urls) && urls.length > 0);
-    const hasMiss = (Array.isArray(miss) && miss.length > 0);
-
-    let extraDiv = null;
-    if (hasGloss || hasUrls || hasMiss) {
-        extraDiv = document.createElement("div");
-        extraDiv.className = "message-extra";
-        contentDiv.appendChild(extraDiv);
-    }
-
-    // gloss
-    if (extraDiv && hasGloss) {
-        const glossDiv = document.createElement("div");
-        glossDiv.className = "message-gloss";
-        glossDiv.textContent = `gloss: ${gloss}`;
-        extraDiv.appendChild(glossDiv);
-    }
-
-    // urls (연속 재생)
-    if (extraDiv && hasUrls) {
-        const urlWrap = document.createElement("div");
-        urlWrap.className = "message-urls";
-
-        const video = document.createElement("video");
-        video.controls = true;
-        video.width = 200;
-        video.className = "message-video";
-        video.style.marginTop = "6px";
-        video.autoplay = false;
-        video.muted = true;
-        video.playsInline = true;
-        video.preload = "metadata";
-
-        const messageKey = `${senderId}|${time}|${(msg || "").slice(0, 32)}`;
-
-        window.__videoIndexCache = window.__videoIndexCache || {};
-        const cache = window.__videoIndexCache;
-
-        let currentIndex = Number.isInteger(cache[messageKey]) ? cache[messageKey] : 0;
-        if (currentIndex < 0 || currentIndex >= urls.length) currentIndex = 0;
-
-        // 사용자가 재생 버튼 눌렀는지 추적
-        let userStarted = false;
-
-        video.src = urls[currentIndex];
-
-        // 재생 버튼 클릭 감지
-        video.addEventListener("play", () => {
-            userStarted = true;
+        openBtn.addEventListener("click", () => {
+            openVideoModal(urls);
         });
 
-        const safePlay = () => {
-            const p = video.play();
-            if (p && typeof p.catch === "function") {
-                p.catch((e) => console.log("[VIDEO] play blocked:", e?.name || e));
-            }
-        };
-
-        video.onloadeddata = null;
-
-        video.onended = () => {
-            currentIndex += 1;
-
-            if (currentIndex < urls.length) {
-                cache[messageKey] = currentIndex;
-                video.src = urls[currentIndex];
-                video.load();
-                video.play().catch(() => {});
-                return;
-            }
-
-            // 마지막까지 끝났으면 0으로 리셋 (자동 재생하지 않음)
-            currentIndex = 0;
-            cache[messageKey] = 0;
-            video.src = urls[0];
-            video.load();
-
-            console.log("[VIDEO] finished all clips. reset to 0 and wait.");
-        };
-
-        video.onplay = () => {
-            // 캐시가 비정상 상태면 0부터 시작 보장
-            if (currentIndex >= urls.length) {
-                currentIndex = 0;
-                cache[messageKey] = 0;
-                video.src = urls[0];
-                video.load();
-            }
-        };
-
-        urlWrap.appendChild(video);
-        extraDiv.appendChild(urlWrap);
+        bubbleWrap.appendChild(openBtn);
     }
 
-    // miss
-    if (extraDiv && hasMiss) {
-        const missDiv = document.createElement("div");
-        missDiv.className = "message-miss";
-        missDiv.textContent = `미매칭: ${miss.join(", ")}`;
-        extraDiv.appendChild(missDiv);
+    // gloss (UI 숨김, 콘솔만)
+    if (hasGloss) {
+        console.log("[GLOSS]", gloss);
     }
+    // miss (UI 숨김, 콘솔만)
+    if (hasMiss) {
+        console.log("[MISS]", miss);
+    }
+
+    contentDiv.appendChild(bubbleWrap);
+    contentDiv.appendChild(timeSpan);
 
     rowDiv.appendChild(nameDiv);
     rowDiv.appendChild(contentDiv);
     msgBox.appendChild(rowDiv);
 
     msgBox.scrollTop = msgBox.scrollHeight;
+}
+
+// 영상 설정을 위해 추가 (소영)
+function ensureVideoModal() {
+    if (document.getElementById("videoModalOverlay")) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "videoModalOverlay";
+    overlay.className = "video-modal-overlay";
+
+    const modal = document.createElement("div");
+    modal.className = "video-modal";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "video-modal-close";
+    closeBtn.textContent = "닫기";
+    closeBtn.addEventListener("click", closeVideoModal);
+
+    const video = document.createElement("video");
+    video.id = "videoModalPlayer";
+    video.className = "video-modal-player";
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.muted = true;
+
+    modal.appendChild(closeBtn);
+    modal.appendChild(video);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // 바깥 클릭 닫기
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) closeVideoModal();
+    });
+
+    // ESC 닫기
+    document.addEventListener("keydown", (e) => {
+        const ov = document.getElementById("videoModalOverlay");
+        if (e.key === "Escape" && ov && ov.classList.contains("is-open")) {
+            closeVideoModal();
+        }
+    });
+}
+
+function openVideoModal(urls) {
+    ensureVideoModal();
+
+    const overlay = document.getElementById("videoModalOverlay");
+    const video = document.getElementById("videoModalPlayer");
+
+    const safeUrls = Array.isArray(urls) ? urls : [];
+    let idx = 0;
+
+    if (!overlay || !video) return;
+
+    overlay.classList.add("is-open");
+
+    if (safeUrls.length === 0) {
+        video.removeAttribute("src");
+        video.load();
+        return;
+    }
+
+    const playAt = (i) => {
+        idx = i;
+        video.src = safeUrls[idx];
+        video.load();
+        video.play().catch(() => {});
+    };
+
+    // 연속 재생
+    video.onended = () => {
+        const next = idx + 1;
+        if (next < safeUrls.length) playAt(next);
+    };
+
+    playAt(0);
+}
+
+function closeVideoModal() {
+    const overlay = document.getElementById("videoModalOverlay");
+    const video = document.getElementById("videoModalPlayer");
+
+    if (!overlay || !video) return;
+
+    video.onended = null;
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+
+    overlay.classList.remove("is-open");
 }
 
 function logout() {
