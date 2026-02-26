@@ -79,10 +79,15 @@ async function createSSEConnection(url, handlers = {}) {
     
     // SSE 이벤트 파싱 및 처리
     const processSSE = async () => {
+        console.log("🔄 [SSE] 스트림 읽기 시작");
         try {
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                
+                if (done) {
+                    console.log("🔌 [SSE] 스트림이 서버에서 종료되었습니다 (done=true)");
+                    break;
+                }
                 
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split("\n");
@@ -99,8 +104,8 @@ async function createSSEConnection(url, handlers = {}) {
                         data = line.substring(5).trim();
                     } else if (line.startsWith("id:")) {
                         eventId = line.substring(3).trim();
-                    } else if (line === "") {
-                        // 빈 줄은 이벤트 끝을 의미
+                    } else if (line === "" || line === "\r") {
+                        // 빈 줄은 이벤트 끝을 의미 (\r도 처리)
                         if (event && data) {
                             const handler = handlers[event] || handlers.message;
                             if (handler) {
@@ -121,11 +126,12 @@ async function createSSEConnection(url, handlers = {}) {
                 }
             }
         } catch (error) {
+            console.error("❌ [SSE] 스트림 읽기 오류:", error);
             if (handlers.error) {
                 handlers.error(error);
             }
-            console.error("SSE 스트림 오류:", error);
         } finally {
+            console.log("🔌 [SSE] processSSE finally 블록 실행");
             if (handlers.close) {
                 handlers.close();
             }

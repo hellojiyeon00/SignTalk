@@ -6,17 +6,32 @@
 const BASE_URL = "http://localhost:8000";
 const myId = localStorage.getItem("userId");
 const myName = localStorage.getItem("userName");
+const accessToken = localStorage.getItem("accessToken");
 
 let currentRoomId = null;    // DB 방 번호
 let currentRoomName = null;  // 소켓 방 이름 (user1_user2)
 
-const socket = io(BASE_URL);
+// Socket.IO 연결 시 JWT 토큰 전달
+const socket = io(BASE_URL, {
+    auth: {
+        token: accessToken
+    }
+});
 
 // 개인 알림 방 등록 (소켓 연결 후 자동 실행)
 socket.on("connect", () => {
-    console.log("✅ [Socket] 연결됨");
+    console.log("✅ [Socket] 연결됨 (JWT 인증)");
     socket.emit("register_user", { user_id: myId });
     console.log("🔔 [알림] 개인 알림 방 등록:", myId);
+});
+
+// 연결 오류 처리
+socket.on("connect_error", (error) => {
+    console.error("❌ [Socket] 연결 실패:", error.message);
+    if (error.message.includes("Authentication") || error.message.includes("token")) {
+        alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
+        window.location.href = "login.html";
+    }
 });
 
 // ======== 초기화 ========
@@ -36,11 +51,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // 친구 목록 로드
     fetchMyFriends();
 
-    // 브라우저 알림 권한 요청
+    // 브라우저 알림 권한 요청 (disaster.js에서 처리)
     requestNotificationPermission();
     
-    // SSE로 재난문자 실시간 수신 시작
-    connectDisasterSSE();
+    // 재난문자 SSE 연결은 disaster.js에서 자동으로 시작됨
 
     // 엔터키 전송
     const chatInput = document.getElementById("messageInput");
