@@ -34,8 +34,14 @@
 
             <div class="sidebar-search">
                 <div class="search-inputs">
-                    <input type="text" id="searchName" placeholder="이름 검색">
-                    <input type="text" id="searchId" placeholder="ID 검색">
+                    <div style="position: relative; flex: 1;">
+                        <input type="text" id="searchName" placeholder="이름 검색" autocomplete="off">
+                        <div id="nameAutocomplete" class="autocomplete-dropdown" style="display:none;"></div>
+                    </div>
+                    <div style="position: relative; flex: 1;">
+                        <input type="text" id="searchId" placeholder="ID 검색" autocomplete="off">
+                        <div id="idAutocomplete" class="autocomplete-dropdown" style="display:none;"></div>
+                    </div>
                 </div>
                 <button onclick="searchUser()" class="btn-search">사용자 검색</button>
             </div>
@@ -49,18 +55,41 @@
             </div>
 
             <div class="friend-list-area">
+                <button onclick="openDisasterRoom()" style="width: 100%; padding: 10px; background-color: #ffeaea; color: #d32f2f; border: 1px solid #ffcdd2; border-radius: 5px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">
+                    🚨 재난 문자 알림
+                </button>
                 <div style="padding: 0 5px 10px 5px; font-size: 0.9rem; color: #666; font-weight: bold;">내 친구 목록</div>
-                <div id="friendList">
-                    </div>
+                <div id="friendList"></div>
             </div>
+
+            <div id="disasterModal" class="modal-overlay" style="display:none;">
+                <div class="modal-content" style="width: 400px; max-height: 80vh; display: flex; flex-direction: column;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                        <h3 style="margin:0; color: #d32f2f;">🚨 재난 문자 알림방</h3>
+                        <button onclick="closeDisasterRoom()" style="border:none; background:none; font-size: 1.2rem; cursor:pointer;">✖</button>
+                    </div>
+                    
+                    <div id="disasterMessages" style="flex: 1; overflow-y: auto; background-color: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #ddd;">
+                        <div style="text-align:center; color:#999; font-size:0.9rem;">이곳에 실시간 재난 문자가 수신됩니다.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="toastContainer" class="toast-container"></div>
         </div>
 
         <div class="chat-area" id="chatArea">
             <div class="chat-header" id="chatHeader">
+                <button id="backToChatListBtn" onclick="leaveChatRoom()" style="display:none; margin-right: 10px; border: none; background: none; cursor: pointer; font-size: 1.2rem; color: #666;">⬅️</button>
                 <span id="chatTitle">대화 상대를 선택해주세요</span>
             </div>
 
             <div class="chat-messages" id="messages">
+                <div id="defaultChatView" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #999; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 20px;">💬</div>
+                    <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;">수어톡에 오신 것을 환영합니다!</div>
+                    <div style="font-size: 0.95rem;">왼쪽에서 친구를 선택하여 대화를 시작하세요.</div>
+                </div>
                 </div>
 
             <div class="chat-input">
@@ -98,14 +127,27 @@
         <div class="modal-content">
             
             <div id="settingsMenu">
-                <h3>⚙️ 설정</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="margin:0;">⚙️ 설정</h3>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
+                </div>
                 <ul class="settings-list">
                     <li onclick="goToProfileEdit()">
                         <span>👤 회원 정보 수정 / 탈퇴</span>
                         <span style="color:#aaa;">&gt;</span>
                     </li>
                     
-                    <li onclick="alert('준비 중인 기능입니다.')">
+                    <li onclick="goToFriendManage()">
+                        <span>👥 친구 목록 관리</span>
+                        <span style="color:#aaa;">&gt;</span>
+                    </li>
+                    
+                    <li onclick="goToLocationSettings()">
+                        <span>📍 위치 설정</span>
+                        <span style="color:#aaa;">&gt;</span>
+                    </li>
+                    
+                    <li onclick="goToNotificationSettings()">
                         <span>🔔 알림 설정</span>
                         <span style="color:#aaa;">&gt;</span>
                     </li>
@@ -125,9 +167,12 @@
             </div>
 
             <div id="settingsEditProfile" style="display:none;">
-                <div style="display:flex; align-items:center; margin-bottom:20px;">
-                    <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
-                    <h3 style="margin:0;">내 정보 수정</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center;">
+                        <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
+                        <h3 style="margin:0;">내 정보 수정</h3>
+                    </div>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
                 </div>
                 
                 <div class="input-group">
@@ -156,6 +201,113 @@
                 </div>
             </div>
 
+            <div id="settingsFriendManage" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center;">
+                        <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
+                        <h3 style="margin:0;">친구 목록 관리</h3>
+                    </div>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
+                </div>
+                
+                <div id="friendManageList" style="max-height:400px; overflow-y:auto;">
+                    <!-- 친구 목록이 여기에 로드됨 -->
+                </div>
+            </div>
+
+            <div id="settingsLocationSettings" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center;">
+                        <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
+                        <h3 style="margin:0;">📍 위치 설정</h3>
+                    </div>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
+                </div>
+                
+                <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin-bottom:20px;">
+                    <p style="margin:0 0 10px 0; color:#666; font-size:0.9rem;">
+                        재난문자를 내 지역에 맞게 받기 위해 위치 정보를 설정하세요.
+                    </p>
+                </div>
+
+                <!-- GPS 허용 토글 -->
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:15px; background:#fff; border:1px solid #ddd; border-radius:8px; margin-bottom:15px;">
+                    <div>
+                        <div style="font-weight:500; margin-bottom:5px;">🛰️ GPS 자동 인식</div>
+                        <div style="font-size:0.85rem; color:#888;">현재 위치를 자동으로 감지합니다</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="gpsToggle" onchange="toggleGPS()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- GPS 허용 시: 위치 표시 -->
+                <div id="gpsLocationDisplay" style="display:none; padding:15px; background:#e8f5e9; border:1px solid #4caf50; border-radius:8px; margin-bottom:15px;">
+                    <div style="font-weight:500; margin-bottom:8px; color:#2e7d32;">✅ 현재 위치</div>
+                    <div id="currentLocation" style="font-size:0.95rem; color:#333;">
+                        위치를 가져오는 중...
+                    </div>
+                    <button onclick="refreshLocation()" style="margin-top:10px; padding:5px 10px; background:#4caf50; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85rem;">
+                        🔄 위치 새로고침
+                    </button>
+                </div>
+
+                <!-- GPS 비허용 시: 수동 입력 -->
+<div id="manualLocationInput" style="display:none; padding:15px; background:#fff3e0; border:1px solid #ff9800; border-radius:8px;">
+                    <div style="font-weight:500; margin-bottom:10px; color:#e65100;">📝 위치 직접 입력</div>
+                    <div style="font-size:0.85rem; color:#666; margin-bottom:8px;">
+                        💡 예시: 서울특별시 강남구 / 경기도 성남시 / 부산광역시 해운대구<br>
+                        🌍 <strong style="color:#ff6f00;">전체 or all</strong> 입력 시 모든 지역의 재난문자 수신
+                    </div>
+                    <input type="text" id="manualLocation" placeholder="예: 서울특별시 강남구 (또는 '전체' 또는 'all')" 
+                           style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:0.9rem; box-sizing:border-box;">
+                    <button onclick="saveManualLocation()" 
+                            style="width:100%; margin-top:10px; padding:10px; background:#ff9800; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
+                        저장
+                    </button>
+                </div>
+
+                <!-- 저장된 위치 정보 표시 -->
+                <div id="savedLocationInfo" style="margin-top:20px; padding:12px; background:#f5f5f5; border-radius:8px; font-size:0.9rem; color:#666; display:none;">
+                    <div style="font-weight:500; margin-bottom:5px;">💾 저장된 위치</div>
+                    <div id="savedLocationText"></div>
+                </div>
+            </div>
+
+            <div id="settingsNotification" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center;">
+                        <button onclick="showSettingsMenu()" style="border:none; background:none; cursor:pointer; font-size:1.2rem; margin-right:10px;">⬅️</button>
+                        <h3 style="margin:0;">🔔 알림 설정</h3>
+                    </div>
+                    <button onclick="closeSettings()" style="border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">✖</button>
+                </div>
+                
+                <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin-bottom:20px;">
+                    <p style="margin:0 0 10px 0; color:#666; font-size:0.9rem;">
+                        재난문자 알림 수신 여부를 설정하세요.
+                    </p>
+                </div>
+
+                <!-- 재난문자 알림 on/off -->
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:20px; background:#fff; border:1px solid #ddd; border-radius:8px;">
+                    <div>
+                        <div style="font-weight:500; margin-bottom:8px; font-size:1.1rem;">🚨 재난문자 알림</div>
+                        <div style="font-size:0.9rem; color:#888;">재난문자 수신 시 알림을 표시합니다</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="disasterNotificationToggle" onchange="toggleDisasterNotification()" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div style="margin-top:20px; padding:15px; background:#fff3e0; border-left:4px solid #ff9800; border-radius:4px; font-size:0.9rem; color:#666;">
+                    💡 알림을 끄면 재난문자를 받지 않습니다.<br>
+                    ⚠️ 긴급 상황을 놓칠 수 있으니 주의하세요.
+                </div>
+            </div>
+
         </div>
     </div>
     
@@ -165,7 +317,14 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
+    <!-- API 헬퍼 (JWT 인증 처리) - 가장 먼저 로드 -->
+    <script src="js/api-helper.js"></script>
+    <!-- 메인 채팅 스크립트 -->
     <script src="js/chat.js"></script>
+    <!-- 재난문자 기능 스크립트 -->
+    <script src="js/disaster.js"></script>
+    <!-- 설정 기능 스크립트 (chat.js 이후에 로드) -->
+    <script src="js/settings.js"></script>
     <!-- 카메라 기능 스크립트 -->
     <script src="js/camera.js"></script>
 </body>
