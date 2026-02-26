@@ -18,6 +18,7 @@ function openSettings() {
     document.getElementById("settingsEditProfile").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "none";
     document.getElementById("settingsLocationSettings").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "none";
     modal.style.display = "flex";
 }
 
@@ -27,6 +28,7 @@ function showSettingsMenu() {
     document.getElementById("settingsEditProfile").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "none";
     document.getElementById("settingsLocationSettings").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "none";
 }
 
 function closeSettings() {
@@ -37,6 +39,7 @@ function closeSettings() {
     document.getElementById("settingsEditProfile").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "none";
     document.getElementById("settingsLocationSettings").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "none";
 }
 
 // ==========================================
@@ -46,7 +49,7 @@ function closeSettings() {
 async function goToProfileEdit() {
     /* 프로필 수정 화면으로 이동 */
     try {
-        const res = await fetch(`${BASE_URL}/auth/me?user_id=${myId}`);
+        const res = await authFetch(`${BASE_URL}/auth/me`);
         if (!res.ok) throw new Error("정보 로딩 실패");
         
         const data = await res.json();
@@ -57,6 +60,8 @@ async function goToProfileEdit() {
 
         document.getElementById("settingsMenu").style.display = "none";
         document.getElementById("settingsEditProfile").style.display = "block";
+        document.getElementById("settingsLocationSettings").style.display = "none";
+        document.getElementById("settingsNotification").style.display = "none";
     } catch (e) {
         alert("정보를 불러올 수 없습니다.");
         console.error(e);
@@ -77,7 +82,7 @@ async function updateMember() {
     };
 
     try {
-        const res = await fetch(`${BASE_URL}/auth/me`, {
+        const res = await authFetch(`${BASE_URL}/auth/me`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(updateData)
@@ -106,7 +111,7 @@ async function deleteMember() {
     if (!confirm("정말로 탈퇴하시겠습니까?\n탈퇴 후에는 복구할 수 없습니다.")) return;
     
     try {
-        const res = await fetch(`${BASE_URL}/auth/me?user_id=${myId}`, {
+        const res = await authFetch(`${BASE_URL}/auth/me`, {
             method: "DELETE"
         });
         
@@ -131,7 +136,8 @@ async function goToFriendManage() {
     /* 친구 목록 관리 화면으로 이동 */
     document.getElementById("settingsMenu").style.display = "none";
     document.getElementById("settingsFriendManage").style.display = "block";
-    
+    document.getElementById("settingsLocationSettings").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "none";    
     // 친구 목록 로드
     await loadFriendList();
 }
@@ -139,7 +145,7 @@ async function goToFriendManage() {
 async function loadFriendList() {
     /* 친구 목록 로드 */
     try {
-        const res = await fetch(`${BASE_URL}/chat/friends?user_id=${myId}`);
+        const res = await authFetch(`${BASE_URL}/chat/friends`);
         if (!res.ok) throw new Error("친구 목록 로딩 실패");
         
         const friends = await res.json();
@@ -220,7 +226,7 @@ async function blockFriend(friendId) {
     if (!confirm(`'${friendId}'님을 차단하시겠습니까?\n차단된 친구는 목록에서 숨겨지며, 차단 해제 시 다시 표시됩니다.`)) return;
 
     try {
-        const res = await fetch(`${BASE_URL}/chat/friend/block?my_id=${myId}&friend_id=${friendId}`, {
+        const res = await authFetch(`${BASE_URL}/chat/friend/block?friend_id=${friendId}`, {
             method: "POST"
         });
         
@@ -244,7 +250,7 @@ async function unblockFriend(friendId) {
     if (!confirm(`'${friendId}'님의 차단을 해제하시겠습니까?`)) return;
 
     try {
-        const res = await fetch(`${BASE_URL}/chat/friend/unblock?my_id=${myId}&friend_id=${friendId}`, {
+        const res = await authFetch(`${BASE_URL}/chat/friend/unblock?friend_id=${friendId}`, {
             method: "POST"
         });
         
@@ -271,6 +277,7 @@ function goToLocationSettings() {
     /* GPS 위치 설정 화면으로 이동 */
     document.getElementById("settingsMenu").style.display = "none";
     document.getElementById("settingsLocationSettings").style.display = "block";
+    document.getElementById("settingsNotification").style.display = "none";
     
     // 저장된 설정 불러오기
     loadLocationSettings();
@@ -391,8 +398,8 @@ function reverseGeocode(lat, lng) {
     locationDisplay.textContent = "주소 검색 중...";
     locationDisplay.style.color = "#999";
     
-    // 백엔드 API 호출
-    fetch(`${BASE_URL}/location/reverse-geocode`, {
+    // 백엔드 API 호출 (JWT 인증 포함)
+    authFetch(`${BASE_URL}/location/reverse-geocode`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -459,6 +466,41 @@ function refreshLocation() {
     getCurrentLocation();
 }
 
+function parseLocationString(locationStr) {
+    /**
+     * 주소 문자열에서 시/도, 구/군 정보 추출
+     * @param {string} locationStr - 입력한 주소 (예: "서울특별시 강남구", "경기도 성남시 분당구")
+     * @returns {object} - {city: "시/도", district: "구/군/시"}
+     */
+    
+    // 시/도 패턴: 특별시, 광역시, 도, 특별자치시, 특별자치도
+    const cityPattern = /(서울특별시|부산광역시|대구광역시|인천광역시|광주광역시|대전광역시|울산광역시|세종특별자치시|경기도|강원특별자치도|강원도|충청북도|충청남도|전라북도|전북특별자치도|전라남도|경상북도|경상남도|제주특별자치도)/;
+    
+    // 구/군/시 패턴: ~구, ~군, ~시 (단, "특별시", "광역시"는 제외)
+    const districtPattern = /([가-힣]+(?:구|군|시))(?!별|역)/;
+    
+    const result = {
+        city: null,
+        district: null
+    };
+    
+    // 시/도 추출
+    const cityMatch = locationStr.match(cityPattern);
+    if (cityMatch) {
+        result.city = cityMatch[1];
+        
+        // 시/도 이후 부분에서 구/군/시 추출
+        const afterCity = locationStr.substring(cityMatch.index + cityMatch[1].length);
+        const districtMatch = afterCity.match(districtPattern);
+        
+        if (districtMatch) {
+            result.district = districtMatch[1];
+        }
+    }
+    
+    return result;
+}
+
 function saveManualLocation() {
     /* 수동 입력한 위치 저장 */
     const location = document.getElementById("manualLocation").value.trim();
@@ -472,10 +514,88 @@ function saveManualLocation() {
     localStorage.setItem("userLocation", location);
     localStorage.setItem("gpsEnabled", "false");
     
+    // "전체" 입력 시 모든 재난문자 수신
+    if (location === "전체" || location.toLowerCase() === "all") {
+        localStorage.setItem("userRegion1", "전체");
+        localStorage.removeItem("userRegion2");
+        
+        // 저장된 위치 정보 표시
+        document.getElementById("savedLocationInfo").style.display = "block";
+        document.getElementById("savedLocationText").textContent = location;
+        
+        alert("✅ 전국 모든 재난문자를 수신합니다.");
+        console.log("✅ 수동 위치 저장: 전체 (모든 재난문자 수신)");
+        return;
+    }
+    
+    // 주소에서 시/도, 구/군 정보 추출
+    const parsedLocation = parseLocationString(location);
+    
+    // 파싱된 지역 정보 저장 (재난문자 필터링용)
+    if (parsedLocation.city) {
+        localStorage.setItem("userRegion1", parsedLocation.city);
+        console.log(`   시/도: ${parsedLocation.city}`);
+    } else {
+        localStorage.removeItem("userRegion1");
+        console.warn("⚠️ 시/도 정보를 추출하지 못했습니다.");
+    }
+    
+    if (parsedLocation.district) {
+        localStorage.setItem("userRegion2", parsedLocation.district);
+        console.log(`   구/군: ${parsedLocation.district}`);
+    } else {
+        localStorage.removeItem("userRegion2");
+    }
+    
     // 저장된 위치 정보 표시
     document.getElementById("savedLocationInfo").style.display = "block";
     document.getElementById("savedLocationText").textContent = location;
     
-    alert("위치가 저장되었습니다.");
-    console.log("✅ 수동 위치 저장:", location);
+    // 사용자 피드백
+    if (parsedLocation.city) {
+        alert(`위치가 저장되었습니다.\n📍 ${parsedLocation.city} ${parsedLocation.district || ''}`);
+        console.log("✅ 수동 위치 저장:", location);
+        console.log(`   재난 필터링 활성화: ${parsedLocation.city} ${parsedLocation.district || ''}`);
+    } else {
+        alert("위치가 저장되었으나 시/도 정보를 인식하지 못했습니다.\n재난 필터링이 작동하지 않을 수 있습니다.");
+        console.log("⚠️ 수동 위치 저장 (필터링 불가):", location);
+    }
 }
+
+// ==========================================
+// 알림 설정
+// ==========================================
+
+function goToNotificationSettings() {
+    /* 알림 설정 화면으로 이동 */
+    document.getElementById("settingsMenu").style.display = "none";
+    document.getElementById("settingsNotification").style.display = "block";
+    
+    // 저장된 설정 불러오기
+    loadNotificationSettings();
+}
+
+function loadNotificationSettings() {
+    /* localStorage에서 알림 설정 불러오기 */
+    const disasterEnabled = localStorage.getItem("disasterNotificationEnabled") !== "false";
+    document.getElementById("disasterNotificationToggle").checked = disasterEnabled;
+    
+    console.log("✅ 알림 설정 로드:", { disaster: disasterEnabled });
+}
+
+function toggleDisasterNotification() {
+    /* 재난문자 알림 on/off */
+    const toggle = document.getElementById("disasterNotificationToggle");
+    const enabled = toggle.checked;
+    
+    localStorage.setItem("disasterNotificationEnabled", enabled);
+    
+    if (enabled) {
+        console.log("✅ 재난문자 알림 활성화");
+        alert("재난문자 알림이 활성화되었습니다.");
+    } else {
+        console.log("❌ 재난문자 알림 비활성화");
+        alert("재난문자 알림이 비활성화되었습니다.\n⚠️ 긴급 재난 상황을 놓칠 수 있으니 주의하세요!");
+    }
+}
+

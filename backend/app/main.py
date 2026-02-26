@@ -6,8 +6,12 @@ import asyncio
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+<<<<<<< HEAD
 from contextlib import asynccontextmanager
 import logging
+=======
+from fastapi.staticfiles import StaticFiles
+>>>>>>> origin/feature/chat
 
 from app.core.redis_client import get_redis, close_redis
 from app.api.auth import router as auth_router
@@ -57,11 +61,31 @@ app.include_router(chat_router, prefix="/chat", tags=["채팅"]) # 채팅 관련
 app.include_router(disaster_router, prefix="/disaster", tags=["재난문자"]) # 재난문자 관련 API는 /disaster 경로로 접근
 app.include_router(location_router, prefix="/location", tags=["위치"]) # 위치 관련 API는 /location 경로로 접근
 
+# 재난 이미지 정적 파일 서빙
+app.mount("/images", StaticFiles(directory="../image"), name="images")
+
 # 서버 시작 시 실행할 초기화 작업 (비동기)
 @app.on_event("startup") 
 async def startup_event():
     # SSE 재난문자 리스너를 백그라운드에서 가동
-    asyncio.create_task(DisasterService.start_disaster_listener())
+    from app.services.disaster_service import kafka_listener_task
+    import app.services.disaster_service as ds
+    ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
+
+# 서버 종료 시 실행할 정리 작업 (비동기)
+@app.on_event("shutdown")
+async def shutdown_event():
+    """서버 종료 시 모든 연결과 리소스를 정리합니다."""
+    import logging
+    logger = logging.getLogger("main")
+    logger.info("🛑 서버 종료 시작...")
+    
+    # Kafka 리스너 및 SSE 연결 정리
+    await DisasterService.stop_disaster_listener()
+    
+    logger.info("✅ 서버 종료 완료")
 
 # Socket.IO 통합 - app과 sio를 연결하여 Socket.IO 서버로 FastAPI 앱을 감쌈
 app = socketio.ASGIApp(sio, app)
+
+
