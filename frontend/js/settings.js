@@ -226,7 +226,7 @@ async function blockFriend(friendId) {
     if (!confirm(`'${friendId}'님을 차단하시겠습니까?\n차단된 친구는 목록에서 숨겨지며, 차단 해제 시 다시 표시됩니다.`)) return;
 
     try {
-        const res = await fetch(`${BASE_URL}/chat/friend/block?my_id=${myId}&friend_id=${friendId}`, {
+        const res = await authFetch(`${BASE_URL}/chat/friend/block?friend_id=${friendId}`, {
             method: "POST"
         });
         
@@ -250,7 +250,7 @@ async function unblockFriend(friendId) {
     if (!confirm(`'${friendId}'님의 차단을 해제하시겠습니까?`)) return;
 
     try {
-        const res = await fetch(`${BASE_URL}/chat/friend/unblock?my_id=${myId}&friend_id=${friendId}`, {
+        const res = await authFetch(`${BASE_URL}/chat/friend/unblock?friend_id=${friendId}`, {
             method: "POST"
         });
         
@@ -398,8 +398,8 @@ function reverseGeocode(lat, lng) {
     locationDisplay.textContent = "주소 검색 중...";
     locationDisplay.style.color = "#999";
     
-    // 백엔드 API 호출
-    fetch(`${BASE_URL}/location/reverse-geocode`, {
+    // 백엔드 API 호출 (JWT 인증 포함)
+    authFetch(`${BASE_URL}/location/reverse-geocode`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"

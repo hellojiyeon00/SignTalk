@@ -63,80 +63,86 @@ function shouldReceiveDisaster(disasterRegion) {
 }
 
 // ======== SSE 연결 ========
-function connectDisasterSSE() {
-    /* SSE 연결로 재난문자 수신 (EventSource 사용 - JWT 인증 불포함) */
+async function connectDisasterSSE() {
+    /* SSE 연결로 재난문자 수신 (fetch 기반 SSE - JWT 인증 포함) */
     if (disasterEventSource) {
         disasterEventSource.close();
+        disasterEventSource = null;
     }
     
-    // SSE 연결 생성 (EventSource는 커스텀 헤더를 지원하지 않음)
-    disasterEventSource = new EventSource(`${BASE_URL}/disaster/stream?user_id=${myId}`);
-    
-    // 재난문자 수신 이벤트
-    disasterEventSource.addEventListener('disaster', (event) => {
-        const data = JSON.parse(event.data);
-        console.log("🚨 [SSE] 재난문자 수신:", data);
+    try {
+        // createSSEConnection은 fetch 기반 SSE 구현 (JWT 토큰 자동 포함)
+        disasterEventSource = await createSSEConnection(`${BASE_URL}/disaster/stream`, {
+            // 재난문자 수신 이벤트
+            disaster: (event) => {
+                const data = event.data;
+                console.log("🚨 [SSE] 재난문자 수신:", data);
+                
+                // 📍 지역 필터링 체크
+                if (!shouldReceiveDisaster(data.region)) {
+                    return; // 필터링: 처리 중단
+                }
+                
+                // 🔔 재난문자 알림 설정 확인
+                const disasterNotificationEnabled = localStorage.getItem("disasterNotificationEnabled") !== "false";
+                if (!disasterNotificationEnabled) {
+                    console.log("🔇 [알림] 재난문자 알림이 비활성화되어 있습니다.");
+                    return; // 알림 비활성화 시 아무것도 표시하지 않음
+                }
+                
+                // 최신 재난문자 등급 저장 및 개수 증가
+                latestDisasterType = data.type_code;
+                unreadDisasterCount++;
+                
+                // 1) 우측 하단에 팝업(Toast) 띄우기 (등급 정보 + 이미지 포함)
+                showToast(data.message, data.type_code, data.type_name, data.disaster_type);
+                
+                // 2) 재난문자 전용 모달창에도 내용 추가하기 (등급 정보 + 이미지 포함)
+                addDisasterMessageToRoom(data.message, data.time, data.type_code, data.type_name, data.disaster_type);
+                
+                // 3) 브라우저 알림 표시 (등급에 따른 제목)
+                const alertTitle = getDisasterTitle(data.type_code, data.type_name);
+                showBrowserNotification(alertTitle, data.message, data.type_code);
+                
+                // 4) 재난문자 버튼 업데이트 (등급에 따른 스타일 + 개수)
+                updateDisasterButton(data.type_code, unreadDisasterCount);
+            },
+            
+            // 연결 유지용 ping 이벤트
+            ping: (event) => {
+                // keep-alive 메시지, 로그 출력 안 함
+            },
+            
+            // shutdown 이벤트: 서버가 중복 연결을 감지했을 때
+            shutdown: (event) => {
+                console.log("🔄 [SSE] 서버가 중복 연결을 감지했습니다. 이 연결을 종료합니다.");
+                if (disasterEventSource) {
+                    disasterEventSource.close();
+                    disasterEventSource = null;
+                }
+            },
+            
+            // 오류 처리
+            error: (error) => {
+                console.error("❌ [SSE] 재난문자 스트림 오류:", error);
+                console.log("🔄 [SSE] 5초 후 재연결 시도...");
+                disasterEventSource = null;
+                setTimeout(connectDisasterSSE, 5000);
+            },
+            
+            // 연결 종료
+            close: () => {
+                console.log("🔌 [SSE] 재난문자 스트림 연결 종료");
+            }
+        });
         
-        // 📍 지역 필터링 체크
-        if (!shouldReceiveDisaster(data.region)) {
-            return; // 필터링: 처리 중단
-        }
+        console.log("✅ [SSE] 재난문자 스트림 연결 중...");
         
-        // 🔔 재난문자 알림 설정 확인
-        const disasterNotificationEnabled = localStorage.getItem("disasterNotificationEnabled") !== "false";
-        if (!disasterNotificationEnabled) {
-            console.log("🔇 [알림] 재난문자 알림이 비활성화되어 있습니다.");
-            return; // 알림 비활성화 시 아무것도 표시하지 않음
-        }
-        
-        // 최신 재난문자 등급 저장 및 개수 증가
-        latestDisasterType = data.type_code;
-        unreadDisasterCount++;
-        
-        // 1) 우측 하단에 팝업(Toast) 띄우기 (등급 정보 + 이미지 포함)
-        showToast(data.message, data.type_code, data.type_name, data.disaster_type);
-        
-        // 2) 재난문자 전용 모달창에도 내용 추가하기 (등급 정보 + 이미지 포함)
-        addDisasterMessageToRoom(data.message, data.time, data.type_code, data.type_name, data.disaster_type);
-        
-        // 3) 브라우저 알림 표시 (등급에 따른 제목)
-        const alertTitle = getDisasterTitle(data.type_code, data.type_name);
-        showBrowserNotification(alertTitle, data.message, data.type_code);
-        
-        // 4) 재난문자 버튼 업데이트 (등급에 따른 스타일 + 개수)
-        updateDisasterButton(data.type_code, unreadDisasterCount);
-    });
-    
-    // 연결 상태 이벤트
-    disasterEventSource.addEventListener('open', () => {
-        console.log("✅ [SSE] 재난문자 스트림 연결됨");
-    });
-    
-    // 연결 유지용 ping 이벤트
-    disasterEventSource.addEventListener('ping', (event) => {
-        // keep-alive 메시지, 로그 출력 안 함
-    });
-    
-    // shutdown 이벤트: 서버가 중복 연결을 감지했을 때
-    disasterEventSource.addEventListener('shutdown', (event) => {
-        console.log("🔄 [SSE] 서버가 중복 연결을 감지했습니다. 이 연결을 종료합니다.");
-        if (disasterEventSource) {
-            disasterEventSource.close();
-            disasterEventSource = null;
-        }
-    });
-    
-    // 오류 처리 (자동 재연결)
-    disasterEventSource.onerror = (error) => {
-        console.error("❌ [SSE] 재난문자 스트림 오류:", error);
-        
-        // EventSource는 자동 재연결을 시도합니다.
-        // readyState가 CLOSED(2)면 수동으로 재연결
-        if (disasterEventSource.readyState === EventSource.CLOSED) {
-            console.log("🔄 [SSE] 5초 후 재연결 시도...");
-            setTimeout(connectDisasterSSE, 5000);
-        }
-    };
+    } catch (error) {
+        console.error("❌ [SSE] 연결 실패:", error);
+        console.log("🔄 [SSE] 5초 후 재연결 시도...");
+        setTimeout(connectDisasterSSE, 5000);
+    }
 }
 
 // ======== 브라우저 알림 ========

@@ -265,17 +265,17 @@ function matchChosung(target, query) {
 }
 
 async function autocompleteSearch(type, query) {
-    /* 자동완성 검색 */
+    /* 자동완성 검색 (JWT 인증) */
     try {
-        let queryParams = `my_id=${myId}`;
+        let queryParams = "";
         
         if (type === "name") {
-            queryParams += `&name=${encodeURIComponent(query)}`;
+            queryParams += `name=${encodeURIComponent(query)}`;
         } else {
-            queryParams += `&member_id=${encodeURIComponent(query)}`;
+            queryParams += `member_id=${encodeURIComponent(query)}`;
         }
         
-        const response = await fetch(`${BASE_URL}/chat/search?${queryParams}`);
+        const response = await authFetch(`${BASE_URL}/chat/search?${queryParams}`);
         const results = await response.json();
         
         const dropdownId = type === "name" ? "nameAutocomplete" : "idAutocomplete";
@@ -352,11 +352,14 @@ async function searchUser() {
     }
 
     try {
-        let queryParams = `my_id=${myId}`;
-        if (nameVal) queryParams += `&name=${encodeURIComponent(nameVal)}`;
-        if (idVal) queryParams += `&member_id=${encodeURIComponent(idVal)}`;
+        let queryParams = "";
+        if (nameVal) queryParams += `name=${encodeURIComponent(nameVal)}`;
+        if (idVal) {
+            if (nameVal) queryParams += "&";
+            queryParams += `member_id=${encodeURIComponent(idVal)}`;
+        }
 
-        const response = await fetch(`${BASE_URL}/chat/search?${queryParams}`);
+        const response = await authFetch(`${BASE_URL}/chat/search?${queryParams}`);
         const results = await response.json();
         
         // 초성 필터링 적용 (이름 검색 시)

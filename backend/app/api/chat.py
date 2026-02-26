@@ -13,16 +13,16 @@ from app.api.auth import verify_token
 
 router = APIRouter()
 
-# @router.get("/search"): GET 요청으로 친구 검색 처리 (인증 불필요)
+# @router.get("/search"): GET 요청으로 친구 검색 처리 (JWT 인증 필수)
 @router.get("/search")
 def search_user(
-    my_id: str,
     name: Optional[str] = None,
     member_id: Optional[str] = None,
+    current_user_id: str = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
-    """친구 검색 (이름 또는 아이디)"""
-    return ChatService.search_users(db, my_id, name, member_id)
+    """친구 검색 (이름 또는 아이디, JWT 토큰 필수)"""
+    return ChatService.search_users(db, current_user_id, name, member_id)
 
 
 # @router.post("/room"): POST 요청으로 채팅방 생성 또는 기존 방 조회 처리 (JWT 인증 필수)
@@ -64,26 +64,26 @@ def get_chat_history(
     return ChatService.get_chat_history(db, room_id, current_user_id)
 
 
-# @router.post("/friend/block"): POST 요청으로 친구 차단 처리 (인증 불필요)
+# @router.post("/friend/block"): POST 요청으로 친구 차단 처리 (JWT 인증 필수)
 @router.post("/friend/block")
 def block_friend(
-    my_id: str,
     friend_id: str,
+    current_user_id: str = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
-    """친구 차단 (소프트 차단)"""
-    return ChatService.block_friend(db, my_id, friend_id)
+    """친구 차단 (소프트 차단, JWT 토큰 필수)"""
+    return ChatService.block_friend(db, current_user_id, friend_id)
 
 
-# @router.post("/friend/unblock"): POST 요청으로 친구 차단 해제 처리 (인증 불필요)
+# @router.post("/friend/unblock"): POST 요청으로 친구 차단 해제 처리 (JWT 인증 필수)
 @router.post("/friend/unblock")
 def unblock_friend(
-    my_id: str,
     friend_id: str,
+    current_user_id: str = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
-    """친구 차단 해제"""
-    return ChatService.unblock_friend(db, my_id, friend_id)
+    """친구 차단 해제 (JWT 토큰 필수)"""
+    return ChatService.unblock_friend(db, current_user_id, friend_id)
 
 
 # @router.post("/read"): POST 요청으로 메시지 읽음 처리 (JWT 인증 필수)
