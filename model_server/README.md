@@ -54,57 +54,81 @@ FastAPI 기반 단일 엔트리 구조이며, Service Layer와 완전히 분리�
     │   ├── logs/                # 로그 파일 저장 위치
     │   └── pids/                # 프로세스 PID 관리
     │
-    ├── requirements.txt         # Python 의존성
+    ├── requirements.txt         # (전역 루트 requirements.txt 사용)
     └── README.md                # 현재 문서
 
 ---
 
 # 🐍 Development Environment
 
-- Python 3.9.x
+- Python 3.9.x (고정)
 - Conda 환경 사용
+- EC2 Ubuntu + CUDA 환경 기준
+
+⚠ 본 프로젝트는 **Python 3.9 환경을 기준으로 합니다.**
 
 ## 1️⃣ Conda 환경 생성
 
-    conda create -n model_server python=3.9
-    conda activate model_server
+    conda create -n signtalk-py39 python=3.9 -y
+    conda activate signtalk-py39
 
 ---
 
-## 2️⃣ PyTorch 설치 (GPU 환경 예시: CUDA 11.6)
+## 2️⃣ pip 최신화 (필수)
 
-    pip install torch==1.12.0+cu116 \
-      -f https://download.pytorch.org/whl/torch_stable.html
-
-⚠ 반드시 서버 CUDA 버전에 맞게 설치할 것.
-
-CUDA 확인:
-
-    nvidia-smi
+    python -m pip install -U pip
 
 ---
 
 ## 3️⃣ Requirements 설치
 
+⚠ 현재 Model Server는 **루트 requirements.txt를 사용합니다.**
+
     pip install -r requirements.txt
 
 ---
 
-# 📦 requirements.txt (Inference 전용)
+# 🔥 PyTorch + CUDA 정책 (현재 표준)
 
-    # Deep Learning
-    torch==1.12.0+cu116
-    transformers==4.26.1
+- Python 3.9
+- CUDA 12.4 환경
+- torch 2.6.0 + cu124
+
+루트 requirements.txt에는 다음 인덱스가 포함되어 있어야 합니다:
+
+    --extra-index-url https://download.pytorch.org/whl/cu124
+
+설치 확인:
+
+    python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+
+정상 출력 예:
+
+    2.6.0+cu124 True
+
+---
+
+# 📦 requirements.txt (현재 구조)
+
+⚠ model_server 전용 requirements는 제거되었으며,
+프로젝트 루트의 requirements.txt로 통합되었습니다.
+
+Deep Learning 관련 주요 패키지 예:
+
+    torch==2.6.0+cu124
+    torchvision==0.21.0+cu124
+    torchaudio==2.6.0+cu124
+    transformers==4.46.3
+    fasttext==0.9.3
     sentencepiece
-    numpy==1.26.4
-    PyYAML
+    safetensors
 
-    # API Server
+API Server 관련 패키지:
+
     fastapi
     uvicorn
     httpx
-
-※ fastText DB 기반 추천을 위해 SQLAlchemy가 포함됨.
+    SQLAlchemy
 
 ---
 
@@ -235,6 +259,8 @@ CUDA 확인:
 - 멀티 모델 단일 엔트리 구조
 - Lazy Loading 기반
 - GPU 메모리 보호 전략 적용
+- 전역 requirements 기반 재현성 검증 완료
+- Python 3.9 + CUDA 환경 고정
 - Service Layer와 완전 분리
 
 를 목표로 설계된 **Inference 전용 FastAPI 서버**입니다.
