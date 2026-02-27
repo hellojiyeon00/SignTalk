@@ -111,7 +111,13 @@
             <button id="closeCameraBtn">✖</button>
         </header>
 
-        <video id="videoInput" width="480" height="360" autoplay playsinline></video>
+        <div class="camera-wrapper">
+            <video id="videoInput" width="480" height="360" autoplay playsinline></video>
+
+            <div id="videoLoading" class="video-loading hidden">
+                <div class="loader4" aria-label="loading"></div>
+            </div>
+        </div>
 
         <!-- 🎮 제어 버튼 -->
         <div class="camera-controls">

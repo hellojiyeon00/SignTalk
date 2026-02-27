@@ -61,7 +61,10 @@ async def call_sign2text(data):
                             h_resp = await client.post(HADOOP_API_URL, json=hadoop_payload, timeout=10.0)
                             
                             if h_resp.status_code == 200:
-                                logger.info(f"✅ [Hadoop Server] {h_resp.json().get('status')}: {h_resp.json().get('detail')}")
+                                h_result = h_resp.json()
+                                h_status = h_result.get("status")
+                                h_detail = h_result.get("detail")
+                                logger.info(f"✅ [Hadoop Server] {h_status}: {h_detail}")
                             else:
                                 logger.error(f"❌ [Hadoop Server] 응답 에러: {h_resp.status_code}")
 
