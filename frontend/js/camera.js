@@ -4,16 +4,20 @@ const closeBtn = document.getElementById("closeCameraBtn");
 const modal = document.getElementById("cameraModal");
 const overlay = document.getElementById("cameraOverlay");
 const video = document.getElementById("videoInput");
+const videoLoading = document.getElementById("videoLoading");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const statusText = document.getElementById("statusText");
-const messagesDiv = document.getElementById("messages");
+const cameraControls = document.getElementById("cameraControls");
+const translationResult = document.getElementById("translationResult");
+const translationInput = document.getElementById("translationInput");
 
 // ===== 상태 =====
 let stream = null;
 let holistic = null;
 let isCapturing = false;
 let frameCount = 0;
+let currentSendPromise = null;
 
 // ===== 인덱스 =====
 const POSE_LANDMARKS_IDX = [11, 12, 13, 14, 15, 16];
@@ -21,7 +25,8 @@ const HAND_LANDMARKS_IDX = Array.from({ length: 21 }, (_, i) => i);
 
 // ===== MediaPipe 초기화 =====
 function initHolistic() {
-    console.log("📷 [MediaPipe] Initialize MediaPipe")
+    console.log("📷 [MediaPipe] Initialize");
+
     holistic = new Holistic({
         locateFile: file =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
@@ -59,7 +64,7 @@ function onResults(results) {
     frameCount++;
     statusText.textContent = `인식 중... (${frameCount} 프레임)`;
 
-    // ✅ Socket.IO 전송(랜드마크 전송)
+    // Socket.IO 전송(랜드마크 전송)
     socket.emit("send_landmarks", {
         room: currentRoomName,
         room_id: currentRoomId,
@@ -71,7 +76,29 @@ function onResults(results) {
     console.log(`📤 [Socket] 전송: ${landmarks}`);
 }
 
-// ===== 버튼 =====
+// ===== 워밍업 =====
+async function warmupHolistic() {
+  // video 프레임 준비 여부 확인
+    if (!holistic || !video.videoWidth) return;
+
+  // 초기화 비용 미리 소모(결과 저장 X)
+  for (let i = 0; i < 2; i++) {
+    await holistic.send({ image: video });
+  }
+  console.log("🔥 [MediaPipe] Warmup Complete");
+}
+
+function showLoading() {
+  videoLoading.classList.remove("hidden");
+  video.style.visibility = "hidden";
+}
+
+function hideLoading() {
+  videoLoading.classList.add("hidden");
+  video.style.visibility = "visible";
+}
+
+// ===== 카메라 열기 =====
 openBtn.addEventListener("click", async () => {
     if (!currentRoomName || !currentRoomId) {
         alert("대화 상대를 먼저 선택해주세요.");
@@ -79,35 +106,46 @@ openBtn.addEventListener("click", async () => {
     }
 
     console.log("📷 [Camera] Open Camera")
-    
+    statusText.textContent = "카메라 준비 중...";
+
     modal.style.display = "block";
     overlay.style.display = "block";
 
-    startBtn.disabled = false;
+    startBtn.disabled = true;
     stopBtn.disabled = true;
-    statusText.textContent = "카메라 준비 중...";
 
     try {
         stream = await navigator.mediaDevices.getUserMedia({
             video: { width: 480, height: 360 },
             audio: false
         });
+
         video.srcObject = stream;
 
-        // 비디오가 실제로 로드될 때까지 대기(이 코드의 역할은?)
-        video.onloadedmetadata = () => {
-            video.play();
-        };
+        video.onloadedmetadata = async () => {
+            await video.play();
 
-        if (!holistic) initHolistic();
-        statusText.textContent = "카메라 준비 완료";
+            if (!holistic) initHolistic();
+
+            // 🔥 워밍업 실행
+            try {
+                await warmupHolistic();
+            } catch (e) {
+                console.warn("🔥 [MediaPipe] Warmup Failed:", e);
+            }
+
+            statusText.textContent = "시작 버튼을 눌러주세요.";
+            statusText.classList.add("active");
+            startBtn.disabled = false;
+        };
     }
-    catch {
+    catch (e) {
         alert("카메라 접근 불가");
         closeCamera();
     }
 });
 
+// ===== 시작 =====
 startBtn.addEventListener("click", () => {
     console.log("📷 [Camera] Start Send Landmarks")
 
@@ -116,28 +154,38 @@ startBtn.addEventListener("click", () => {
 
     startBtn.disabled = true;
     stopBtn.disabled = false;
-    statusText.classList.add("active");
+    statusText.classList.remove("active");
 
     async function loop() {
         if (!isCapturing) return;
-        await holistic.send({ image: video });
+
+        currentSendPromise = holistic.send({ image: video });
+        await currentSendPromise;
+        currentSendPromise = null;
+
+        if (!isCapturing) return;
+
         requestAnimationFrame(loop);
     }
     loop();
 });
 
-// TODO: 정지 버튼 클릭 시 로딩 바가 돌아가고 문자을 반환받으면 번역 완료 문구 출력 후 카메라 화면 자동 종료
-// 종료 후 (입력 창에 바로 텍스트 출력 or 정지 버튼이 전송 버튼으로 변환)
-stopBtn.addEventListener("click", () => {
+
+// ===== 중지 =====
+stopBtn.addEventListener("click", async () => {
     console.log("📷 [Camera] Stop Send Landmarks")
 
     isCapturing = false;
-    startBtn.disabled = true;
     stopBtn.disabled = true;
-    statusText.textContent = "분석 중…";
-    statusText.classList.remove("active");
+    statusText.textContent = "";
 
-    // ✅ Socket.IO 전송(랜드마크 전송 중지)
+    if (currentSendPromise) {
+        await currentSendPromise;
+    }
+    
+    showLoading();
+
+    // Socket.IO 전송(랜드마크 전송 중단)
     socket.emit("send_landmarks", {
         room: currentRoomName,
         room_id: currentRoomId,
@@ -147,19 +195,72 @@ stopBtn.addEventListener("click", () => {
     });
 });
 
-// TODO: 정지 버튼을 누르지 않고 카메라 화면을 닫으면 '전송하지 않고 닫으시겠습니까?' 팝업 출력
+// ===== 닫기 =====
 function closeCamera() {
     console.log("📷 [Camera] Close Camera")
     
     isCapturing = false;
+    hideLoading();
 
     if (stream) {
         stream.getTracks().forEach(t => t.stop());
         stream = null;
     }
     video.srcObject = null;
+    video.style.display = "block"; // 다음 오픈을 위해 복구
+    cameraControls.classList.remove("hidden"); // 제어 버튼 복구
+    translationResult.classList.add("hidden"); // 결과창 초기화
+
     modal.style.display = "none";
     overlay.style.display = "none";
 }
 
 closeBtn.addEventListener("click", closeCamera);
+
+// ===== 번역 결과 수신 및 자동 처리 =====
+socket.on("translation_result", (data) => {
+    console.log("📤 [Socket] 번역 결과 수신:", data.message);
+    onTranslationComplete(data);
+});
+
+// 번역 완료 처리: '번역 완료' 표시 → 카메라 종료 → 입력창에 텍스트 입력
+function onTranslationComplete(data) {
+    
+    // 1. 로딩바 숨기기
+    hideLoading();
+
+    // 2. 카메라 제어 영역과 비디오 숨기기
+    if (cameraControls) cameraControls.classList.add("hidden");
+    if (video) video.style.display = "none"; // 비디오를 아예 안보이게 처리
+    statusText.textContent = "";
+
+    // 3. 번역 결과 입력창 표시
+    const resultText = data.message;
+    if (translationInput && translationResult) {
+        translationInput.value = resultText;
+        translationResult.classList.remove("hidden");
+        
+        // 입력창에 포커스 (약간의 지연시간을 주어 렌더링 후 실행되게 함)
+        setTimeout(() => translationInput.focus(), 50);
+    }
+
+    console.log("✅ [Camera] 번역 완료 → 결과 표시");
+}
+
+// ===== 모달 내 전송 버튼 =====
+function sendTranslation() {
+    const text = translationInput.value.trim();
+    if (!text) return;
+
+    // Socket.IO 전송(랜드마크 전송 중단)
+    socket.emit("send_translation", {
+        room: currentRoomName,
+        room_id: currentRoomId,
+        username: myId,
+        message: text,
+    });
+
+    console.log(`📤 [Socket] 전송: ${text}`);
+
+    closeCamera();
+}

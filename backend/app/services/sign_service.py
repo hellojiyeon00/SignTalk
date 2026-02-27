@@ -46,7 +46,6 @@ async def call_sign2text(data):
                     if korean_text and all_landmarks:
                         # 한국 시간 (KST = UTC+9)
                         KST = timezone(timedelta(hours=9))
-                        now_kst = datetime.now(KST).strftime("%H:%M")
                         v_talk_date = datetime.now(KST).isoformat()
 
                         # 하둡 전송
@@ -61,7 +60,10 @@ async def call_sign2text(data):
                             h_resp = await client.post(HADOOP_API_URL, json=hadoop_payload, timeout=10.0)
                             
                             if h_resp.status_code == 200:
-                                logger.info(f"✅ [Hadoop Server] {h_resp.json().get('status')}: {h_resp.json().get('detail')}")
+                                h_result = h_resp.json()
+                                h_status = h_result.get("status")
+                                h_detail = h_result.get("detail")
+                                logger.info(f"✅ [Hadoop Server] {h_status}: {h_detail}")
                             else:
                                 logger.error(f"❌ [Hadoop Server] 응답 에러: {h_resp.status_code}")
 
@@ -70,7 +72,7 @@ async def call_sign2text(data):
                         
                         # 세션 정리
                         await clear_session(room_id, sender_id)
-                        return {"message": korean_text, "time": now_kst}
+                        return korean_text
 
                 else:
                     logger.error(f"❌ [Model Server] 응답 실패 (Code: {resp.status_code})")

@@ -46,7 +46,7 @@ async def translate_gloss2text(gloss_list):
         )
 
         # final_text = response.choices[0].message.content.strip()
-        final_text = "너희들은 전공이 뭐야?"
+        final_text = "안녕하세요!"
         logger.info(f"✅ [LLM] 변환 완료: {final_text}")
         
         return final_text
