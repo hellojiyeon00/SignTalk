@@ -69,3 +69,31 @@ uvloop==0.22.1
 watchfiles==1.1.1
 websockets==15.0.1
 wsproto==1.2.0
+
+# =========================
+# Model Server additions (Python 3.9 compatible)
+# =========================
+fasttext==0.9.3
+transformers==4.46.3
+tokenizers==0.20.3
+huggingface-hub>=0.23.2,<1.0
+safetensors==0.7.0
+tqdm==4.67.3
+numpy==2.0.2
+regex==2026.1.15
+filelock==3.19.1
+fsspec==2025.10.0
+pillow==11.3.0
+
+# =========================
+# PyTorch CUDA wheels (IMPORTANT)
+# - 'torch==2.6.0+cu124' is NOT on default PyPI index.
+# - This extra index makes pip find '+cu124' builds.
+# =========================
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+torchaudio==2.6.0+cu124
+
+# (Optional) If you ever need to avoid pulling NVIDIA CUDA libs via pip,
+# remove nvidia-* pins and rely on conda/cuda system libs instead.
