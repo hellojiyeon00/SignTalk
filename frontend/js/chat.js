@@ -3,7 +3,7 @@
  * Socket.IO 기반 실시간 1:1 채팅
  */
 
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "http://localhost:8010";
 const myId = localStorage.getItem("userId");
 const myName = localStorage.getItem("userName");
 const accessToken = localStorage.getItem("accessToken");
@@ -133,21 +133,21 @@ document.addEventListener("DOMContentLoaded", () => {
 // ======== 소켓 이벤트 ========
 socket.on("receive_message", (data) => {
     console.log("📥 [Socket] 메시지 수신:", data);
-    
+
     if (data.sender && data.message) {
-        const timeStr = data.time || new Date().toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            hour12: false 
+        const timeStr = data.time || new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
         });
-        
+
         // 현재 채팅방에서 메시지를 받았는지 확인
         const isInCurrentRoom = currentRoomName && currentRoomName.includes(data.sender);
         
         // 상대방 메시지를 현재 채팅방에서 받으면 즉시 읽음 처리
         if (data.sender !== myId && isInCurrentRoom) {
             // 읽은 상태로 표시
-            displayMessage(data.sender, data.sender_name, data.message, timeStr, true);
+            displayMessage(data.sender, data.sender_name, data.message, timeStr, true, data.gloss || "", data.urls || [], data.miss || []);
             
             // 즉시 읽음 처리 API 호출
             if (currentRoomId && currentRoomName) {
@@ -168,7 +168,7 @@ socket.on("receive_message", (data) => {
             }
         } else {
             // 다른 채팅방의 메시지이거나 내가 보낸 메시지는 읽지 않은 상태
-            displayMessage(data.sender, data.sender_name, data.message, timeStr, false);
+            displayMessage(data.sender, data.sender_name, data.message, timeStr, false, data.gloss || "", data.urls || [], data.miss || []);
             
             // 다른 채팅방의 메시지인 경우만 친구 목록 업데이트
             if (data.sender !== myId && !isInCurrentRoom) {
@@ -212,7 +212,7 @@ async function fetchMyFriends() {
     try {
         const response = await authFetch(`${BASE_URL}/chat/list`);
         const friends = await response.json();
-        
+
         const listContainer = document.getElementById("friendList");
         listContainer.innerHTML = "";
 
@@ -235,7 +235,7 @@ async function fetchMyFriends() {
             
             itemDiv.innerHTML = `
                 <div style="font-weight:500;">
-                    ${user.user_name} 
+                    ${user.user_name}
                     <span style="font-size:12px; color:#888;">(${user.user_id})</span>
                     ${unreadBadge}
                 </div>`;
@@ -410,7 +410,7 @@ async function searchUser() {
             addBtn.style.cssText = `
                 font-size:12px; padding:4px 8px; cursor:pointer; 
                 background:#007bff; color:white; border:none; border-radius:4px; 
-                white-space:nowrap; min-width:45px;`;
+                white-space:nowrap; min-width:45px;`;                
             addBtn.onclick = (e) => {
                 e.stopPropagation();
                 addFriend(user.member_id);
@@ -438,7 +438,7 @@ function closeSearch() {
 
 async function addFriend(targetId) {
     /* 친구 추가 */
-    if(!confirm(`'${targetId}'님을 친구로 추가하시겠습니까?`)) return;
+    if (!confirm(`'${targetId}'님을 친구로 추가하시겠습니까?`)) return;
 
     try {
         const response = await authFetch(`${BASE_URL}/chat/room`, {
@@ -523,15 +523,39 @@ async function startChat(friend, clickedElement) {
             try {
                 const dateObj = new Date(chat.date);
                 if (!isNaN(dateObj)) {
-                    timeStr = dateObj.toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit', 
-                        hour12: false 
+                    timeStr = dateObj.toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
                     });
                 }
-            } catch(e) {}
+            } catch (e) { }
 
-            displayMessage(chat.sender, chat.sender_name, chat.message, timeStr, chat.is_read);
+            // 수어 영상 히스토리 저장을 위해 추가
+            // 히스토리 영상 보존: url_path(문자열) -> urls(배열)로 변환
+            let historyUrls = [];
+            if (Array.isArray(chat.urls) && chat.urls.length > 0) {
+                // 기존에 urls 배열에 내려오는 경우(호환)
+                historyUrls = chat.urls;
+            } else if (typeof chat.url_path === "string" && chat.url_path.trim().length > 0) {
+                // DB에서 STRING_AGG로 내려온 "a, b, c" 형태 처리
+                historyUrls = chat.url_path
+                    .split(",")
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            }
+
+            displayMessage(
+                chat.sender,
+                chat.sender_name,
+                chat.message,
+                timeStr,
+                chat.is_read,
+                chat.gloss || "",
+                // chat.urls || [],
+                (chat.urls || historyUrls || []),
+                chat.miss || []
+            );
         });
 
         // 스크롤 맨 아래로
@@ -603,9 +627,19 @@ function sendMessage() {
     input.focus();
 }
 
-function displayMessage(senderId, senderName, msg, time, isRead = true) {
+function displayMessage(senderId, senderName, msg, time, isRead = true, gloss = "", urls = [], miss = []) {
+
     /* 말풍선 렌더링 */
     const msgBox = document.getElementById("messages");
+
+    // urls 방어: null/undefined/빈문자 제거 (video.src 오류 방지)
+    if (Array.isArray(urls)) {
+        urls = urls
+            .map(u => (typeof u === "string" ? u.trim() : ""))
+            .filter(u => u.length > 0);
+    } else {
+        urls = [];
+    }
     const isMine = (senderId === myId);
 
     const rowDiv = document.createElement("div");
@@ -621,6 +655,16 @@ function displayMessage(senderId, senderName, msg, time, isRead = true) {
     const bubbleDiv = document.createElement("div");
     bubbleDiv.className = "message-bubble";
     bubbleDiv.textContent = msg;
+    
+    const hasGloss = (typeof gloss === "string" && gloss.trim().length > 0);
+    const hasUrls = (Array.isArray(urls) && urls.length > 0);
+    const hasMiss = (Array.isArray(miss) && miss.length > 0);
+
+    // 말풍선 + 버튼을 묶는 래퍼 (버튼을 말풍선 아래로 내리기)
+    const bubbleWrap = document.createElement("div");
+    bubbleWrap.className = "message-bubble-wrap";
+
+    bubbleWrap.appendChild(bubbleDiv);
 
     // 시간 + 읽음 표시를 감싸는 래퍼
     const timeWrapper = document.createElement("div");
@@ -640,13 +684,127 @@ function displayMessage(senderId, senderName, msg, time, isRead = true) {
     timeSpan.textContent = time;
     timeWrapper.appendChild(timeSpan);
 
-    contentDiv.appendChild(bubbleDiv);
+    // urls (팝업 버튼) - 말풍선 바로 아래에 붙임(별도 요소)
+    if (hasUrls) {
+        const openBtn = document.createElement("button");
+        openBtn.type = "button";
+        openBtn.className = "video-open-btn";
+        openBtn.textContent = "🎬 영상 보기";
+
+        openBtn.addEventListener("click", () => {
+            openVideoModal(urls);
+        });
+
+        bubbleWrap.appendChild(openBtn);
+    }
+
+    // gloss/miss는 UI에 숨기고 콘솔만(필요하면 유지)
+    if (hasGloss) console.log("[GLOSS]", gloss);
+    if (hasMiss) console.log("[MISS]", miss);
+
+    contentDiv.appendChild(bubbleWrap);
+    // contentDiv.appendChild(timeSpan);
+    // contentDiv.appendChild(bubbleDiv);
     contentDiv.appendChild(timeWrapper);
+
     rowDiv.appendChild(nameDiv);
     rowDiv.appendChild(contentDiv);
     msgBox.appendChild(rowDiv);
-    
+
     msgBox.scrollTop = msgBox.scrollHeight;
+}
+
+// 영상 설정을 위해 추가
+function ensureVideoModal() {
+    if (document.getElementById("videoModalOverlay")) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "videoModalOverlay";
+    overlay.className = "video-modal-overlay";
+
+    const modal = document.createElement("div");
+    modal.className = "video-modal";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "video-modal-close";
+    closeBtn.textContent = "닫기";
+    closeBtn.addEventListener("click", closeVideoModal);
+
+    const video = document.createElement("video");
+    video.id = "videoModalPlayer";
+    video.className = "video-modal-player";
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.muted = true;
+
+    modal.appendChild(closeBtn);
+    modal.appendChild(video);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // 바깥 클릭 닫기
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) closeVideoModal();
+    });
+
+    // ESC 닫기
+    document.addEventListener("keydown", (e) => {
+        const ov = document.getElementById("videoModalOverlay");
+        if (e.key === "Escape" && ov && ov.classList.contains("is-open")) {
+            closeVideoModal();
+        }
+    });
+}
+
+function openVideoModal(urls) {
+    ensureVideoModal();
+
+    const overlay = document.getElementById("videoModalOverlay");
+    const video = document.getElementById("videoModalPlayer");
+
+    const safeUrls = Array.isArray(urls) ? urls : [];
+    let idx = 0;
+
+    if (!overlay || !video) return;
+
+    overlay.classList.add("is-open");
+
+    if (safeUrls.length === 0) {
+        video.removeAttribute("src");
+        video.load();
+        return;
+    }
+
+    const playAt = (i) => {
+        idx = i;
+        video.src = safeUrls[idx];
+        video.load();
+        video.play().catch(() => {});
+    };
+
+    // 연속 재생
+    video.onended = () => {
+        const next = idx + 1;
+        if (next < safeUrls.length) playAt(next);
+    };
+
+    playAt(0);
+}
+
+function closeVideoModal() {
+    const overlay = document.getElementById("videoModalOverlay");
+    const video = document.getElementById("videoModalPlayer");
+
+    if (!overlay || !video) return;
+
+    video.onended = null;
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+
+    overlay.classList.remove("is-open");
 }
 
 function logout() {
@@ -659,6 +817,95 @@ function logout() {
 // 설정 관련 기능은 settings.js로 분리되었습니다.
 // openSettings, goToProfileEdit, goToFriendManage, goToLocationSettings 등
 
+function showSettingsMenu() {
+    /* 설정 메뉴로 돌아가기 */
+    document.getElementById("settingsMenu").style.display = "block";
+    document.getElementById("settingsEditProfile").style.display = "none";
+}
+
+async function goToProfileEdit() {
+    /* 프로필 수정 화면으로 이동 */
+    try {
+        const res = await fetch(`${BASE_URL}/auth/me?user_id=${myId}`);
+        if (!res.ok) throw new Error("정보 로딩 실패");
+
+        const data = await res.json();
+
+        document.getElementById("editName").value = data.user_name;
+        document.getElementById("editPhone").value = data.phone_number;
+        document.getElementById("editPw").value = "";
+
+        document.getElementById("settingsMenu").style.display = "none";
+        document.getElementById("settingsEditProfile").style.display = "block";
+    } catch (e) {
+        alert("정보를 불러올 수 없습니다.");
+        console.error(e);
+    }
+}
+
+function closeSettings() {
+    document.getElementById("settingsModal").style.display = "none";
+}
+
+async function updateMember() {
+    /* 회원정보 수정 */
+    const newName = document.getElementById("editName").value;
+    const newPhone = document.getElementById("editPhone").value;
+    const newPw = document.getElementById("editPw").value;
+
+    const updateData = {
+        user_id: myId,
+        user_name: newName || null,
+        phone_number: newPhone || null,
+        password: newPw || null
+    };
+
+    try {
+        const res = await fetch(`${BASE_URL}/auth/me`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updateData)
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+            alert(result.message);
+            if (newName) {
+                localStorage.setItem("userName", newName);
+                document.getElementById("myProfileName").textContent = newName + "님";
+            }
+            closeSettings();
+        } else {
+            alert("수정 실패: " + result.detail);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("서버 오류가 발생했습니다.");
+    }
+}
+
+async function deleteMember() {
+    /* 회원 탈퇴 */
+    if (!confirm("정말로 탈퇴하시겠습니까?\n탈퇴 후에는 복구할 수 없습니다.")) return;
+
+    try {
+        const res = await fetch(`${BASE_URL}/auth/me?user_id=${myId}`, {
+            method: "DELETE"
+        });
+
+        if (res.ok) {
+            alert("탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.");
+            logout();
+        } else {
+            const err = await res.json();
+            alert("탈퇴 실패: " + err.detail);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("서버 오류가 발생했습니다.");
+    }
+}
 // ======== 재난문자 관련 기능 ========
 // 재난문자 관련 기능은 disaster.js로 분리되었습니다.
 // connectDisasterSSE, showToast, openDisasterRoom, closeDisasterRoom 등
