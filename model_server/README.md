@@ -54,7 +54,6 @@ FastAPI 기반 단일 엔트리 구조이며, Service Layer와 완전히 분리�
     │   ├── logs/                # 로그 파일 저장 위치
     │   └── pids/                # 프로세스 PID 관리
     │
-    ├── .env                     # 환경 변수 파일 (Git 제외)
     ├── requirements.txt         # Python 의존성
     └── README.md                # 현재 문서
 
@@ -105,7 +104,7 @@ CUDA 확인:
     uvicorn
     httpx
 
-※ model_server는 추론 전용이므로 DB 관련 라이브러리는 포함하지 않음.
+※ fastText DB 기반 추천을 위해 SQLAlchemy가 포함됨.
 
 ---
 
@@ -113,15 +112,21 @@ CUDA 확인:
 
 위치:
 
-    model_server/.env
+    프로젝트 루트의 .env 파일 사용
+    model_server는 별도의 .env를 사용하지 않으며,
+    루트 .env를 통해 환경변수를 로드한다.
 
 예시:
 
-    KOBART_CHECKPOINT=/home/ubuntu/model_server/assets/kobart/checkpoint-17000
+    DATABASE_URL=postgresql://multicampus_user:multicampuscci4@56.155.47.51:5432/multicampus_db
+    
+    FASTTEXT_MODEL_PATH=/home/lab06/SignTalk/model_server/assets/fasttext/cc.ko.300.bin
+
+    KOBART_CHECKPOINT=/home/lab06/SignTalk/model_server/assets/kobart/final_model_checkpoint-17800
+    
     DEVICE=auto
     MAX_NEW_TOKENS=64
     NUM_BEAMS=4
-    MODEL_SERVER_TIMEOUT_SEC=10
 
 ⚠ `.env`와 `assets/`는 Git에 올리지 말 것.
 
@@ -130,8 +135,10 @@ CUDA 확인:
 # 🚀 Server 실행
 
 ## Production (권장)
+    
+프로젝트 루트에서 실행:
 
-    uvicorn main:app \
+    uvicorn model_server.main:app \
         --host 0.0.0.0 \
         --port 8001 \
         --workers 1

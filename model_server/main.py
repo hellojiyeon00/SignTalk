@@ -7,24 +7,26 @@ main.py
 """
 
 from __future__ import annotations
-from typing import Any, Dict, Optional
+
+import os
 import traceback
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from registry import get_handler
+# .env 로딩 (반드시 registry import 이전)
+# 포르젝트 루트(.env) 명시 로드: uvicorn을 어디서 실행해도 동일하게 동작
+REPO_ROOT = Path(__file__).resolve().parents[1]
+ENV_PATH = REPO_ROOT / ".env"
 
-from pathlib import Path
-from dotenv import load_dotenv
+load_dotenv(dotenv_path=ENV_PATH, override=False)
 
-ENV_PATH = Path(__file__).resolve().with_name(".env")
-load_dotenv(dotenv_path=str(ENV_PATH), override=True)
+print("[ENV CHECK]", "KOBART_MODEL_DIR=", os.getenv("KOBART_MODEL_DIR"), "KOBART_CHECKPOINT=", os.getenv("KOBART_CHECKPOINT"))
 
-
-# .env 로드 (export 대신 사용)
-load_dotenv()
+from model_server.registry import get_handler
 
 app = FastAPI(title="Model Server", version="2.0.0")
 

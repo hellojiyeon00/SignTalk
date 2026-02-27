@@ -2,7 +2,7 @@
 
 채팅방 관리 및 메시지 관련 비즈니스 로직
 """
-# KoBART에서 생성한 Gloss Token 전처리 후 DB Word-Video url 연결을 위해 추가 (소영)
+# KoBART에서 생성한 Gloss Token 전처리 후 DB Word-Video url 연결을 위해 추가
 from __future__ import annotations
 
 import logging
@@ -26,6 +26,13 @@ logger = logging.getLogger(__name__)
 # 채팅 서비스 클래스 정의
 class ChatService:
     """채팅 관련 비즈니스 로직 처리"""
+
+    # ModelClient 재사용(keep-alive/pool 활용)
+    # - kobart: 기본 timeout
+    # - fasttext: timeout 5초로 완화(원인 분리 목적)
+    _kobart_client = ModelClient()
+    _fasttext_client = ModelClient(timeout_sec=5.0)
+
     @staticmethod
     def _apply_fasttext_best(
         gloss_clean: str,
@@ -139,9 +146,9 @@ class ChatService:
         (동기) 텍스트를 모델서버에 보내 gloss를 받고, URL 리스트까지 반환한다.
         socekets.py에서 run_in_threadpool로 호출하기 위한 형태. 
         """
-        client = ModelClient()
+        client = ChatService._kobart_client
         # fastText는 보조 단계이므로 WS 지연 방지를 위해 짧은 timeout 사용
-        fasttext_client = ModelClient(timeout_sec=2.0)
+        fasttext_client = ChatService._fasttext_client
         clean_text = normalize_input_text(text)
 
         # 모델 입력은 normalize_input_text까지만 적용한 텍스트를 그대로 사용
@@ -209,7 +216,6 @@ class ChatService:
                 # Step B: fastText best 적용 + 2차 URL 재매핑
                 # =========================
                 threshold = 0.65
-
                 ft_results = {}
 
                 if isinstance(fast_res, dict):
@@ -217,36 +223,40 @@ class ChatService:
                     ft_results = ft_result.get("results") if isinstance(ft_result.get("results"), dict) else {}
 
                     new_gloss, replaced = ChatService._apply_fasttext_best(
-                    gloss_clean=gloss_clean,
-                    miss_tokens=miss,
-                    fast_res=ft_results,
-                    threshold=threshold
-                )
-                    
-                if replaced:
-                    before_url_cnt = len(urls)
-                    before_miss_cnt = len(miss)
-
-                    logger.info("[FASTTEXT][%s] replaced=%s", trace_id, replaced)
-
-                    # 2차 매핑
-                    urls2, miss2 = ChatService.gloss_to_urls(new_gloss)
-
-                    logger.info(
-                        "[FASTTEXT][%s] remap url_cnt %d->%d miss_cnt %d->%d",
-                        trace_id,
-                        before_url_cnt,
-                        len(urls2),
-                        before_miss_cnt,
-                        len(miss2),
+                        gloss_clean=gloss_clean,
+                        miss_tokens=miss,
+                        fast_res=ft_results,
+                        threshold=threshold
                     )
+                    
+                    if replaced:
+                        before_url_cnt = len(urls)
+                        before_miss_cnt = len(miss)
 
-                    # 최종 반영
-                    gloss_clean = new_gloss
-                    urls = urls2
-                    miss = miss2
+                        logger.info("[FASTTEXT][%s] replaced=%s", trace_id, replaced)
+
+                        # 2차 매핑
+                        urls2, miss2 = ChatService.gloss_to_urls(new_gloss)
+
+                        logger.info(
+                            "[FASTTEXT][%s] remap url_cnt %d->%d miss_cnt %d->%d",
+                            trace_id,
+                            before_url_cnt,
+                            len(urls2),
+                            before_miss_cnt,
+                            len(miss2),
+                        )
+
+                        # 최종 반영
+                        gloss_clean = new_gloss
+                        urls = urls2
+                        miss = miss2
+                    else:
+                        logger.info("[FASTTEXT][%s] replaced=none", trace_id)
                 else:
-                    logger.info("[FASTTEXT][%s] replaced=none", trace_id)
+                    logger.info("[FASTTEXT][%s] skip(non-dict response)", trace_id)
+
+
             except Exception as e:
                 # Step A에서는 fastText 실패를 무조건 삼키고 진행 (스택트레이스는 남기지 않음)
                 logger.warning("[FASTTEXT][%s] call failed (Step A): %s", trace_id, e)

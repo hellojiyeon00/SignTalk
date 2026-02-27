@@ -148,19 +148,18 @@ class ModelClient:
 
         url = f"{self.base_url}/infer/{task.strip()}"
         logger.info("[ModelClient] base_url=%s resolved_url=%s", self.base_url, url)
-        t0 = time.time()
 
-        logger.info(f"[ModelClient] POST {url} timeout={self.timeout_sec}s (payload)")
-        timeout = httpx.Timeout(connect=3.0, read=self.timeout_sec, write=5.0, pool=5.0)
-        with httpx.Client(timeout=timeout, trust_env=False) as client:
-            response = client.post(
-                url,
-                json={"payload": payload},
-                headers={"X-Caller": "backend"},
-            )
+        t0 = time.time()
+        logger.info("[ModelClient] POST %s timeout=%ss (payload)", url, self.timeout_sec)
+
+        response = self._client.post(
+            url,
+            json={"payload": payload},
+            headers={"X-Caller": "backend"},
+        )
 
         elapsed_ms = int((time.time() - t0) * 1000)
-        logger.info(f"[ModelClient] RESP {response.status_code} elapsed_ms={elapsed_ms}")
+        logger.info("[ModelClient] RESP %s elapsed_ms=%d", response.status_code, elapsed_ms)
 
         response.raise_for_status()
         return response.json()

@@ -14,8 +14,7 @@ from __future__ import annotations
 from typing import Callable, Dict, Optional
 
 # models/ 아래에 있는 각 모델 모듈 (infer(req) 제공)
-# from models import fasttext, kobart, llm, lstm
-from models import kobart, fasttext
+from model_server.models import kobart, fasttext
 
 Handler = Callable[[dict], dict]
 
@@ -23,8 +22,6 @@ Handler = Callable[[dict], dict]
 _HANDLERS: Dict[str, Handler] = {
     "kobart": kobart.infer,
     "fasttext": fasttext.infer
-    # "lstm": lstm.infer
-    # "llm": llm.infer
 }
 
 
