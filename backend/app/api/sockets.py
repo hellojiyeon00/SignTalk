@@ -237,27 +237,44 @@ async def handle_send_message(sid, data):
 @sio.on("send_landmarks")
 async def handle_send_landmarks(sid, data):
     # 서비스 호출 (AI 모델 예측 및 단어 추출)
-    sign_data = await call_sign2text(data)
+    msg = await call_sign2text(data)
 
-    if sign_data is not None:
-        room_id = data.get("room_id")
+    if msg is not None:
         room_name = data.get("room")
-        sender_id = data.get("username")
-        msg = sign_data["message"]
 
-        if room_id and sender_id and msg:
-            try:
-                # DB 저장 (별도 스레드)
-                sender_name = await run_in_threadpool(save_message_sync, room_id, sender_id, msg)
+        payload = {
+            "room": room_name,
+            "room_id": data.get("room_id"),
+            "username": data.get("username"),
+            "message": msg
+        }
 
-                # 실시간 전송
-                if sender_name:
-                    payload = {
-                        "sender": sender_id,
-                        "sender_name": sender_name,
-                        "message": msg,
-                        "time": sign_data["time"]
-                    }
+        await sio.emit("translation_result", payload, room=room_name)
+
+@sio.on("send_translation")
+async def handle_send_translation(sid, data):
+    room_id = data.get("room_id")
+    room_name = data.get("room")
+    sender_id = data.get("username")
+    msg = data.get("message")
+
+    # 한국 시간 (KST = UTC+9)
+    KST = timezone(timedelta(hours=9))
+    now_kst = datetime.now(KST).strftime("%H:%M")
+    
+    if room_id and sender_id and msg:
+        try:
+            # DB 저장 (별도 스레드)
+            sender_name = await run_in_threadpool(save_message_sync, room_id, sender_id, msg)
+
+            # 실시간 전송
+            if sender_name:
+                payload = {
+                    "sender": sender_id,
+                    "sender_name": sender_name,
+                    "message": msg,
+                    "time": now_kst
+                }
                 
                 # 1. 같은 방에 있는 사용자들에게 메시지 전송
                 await sio.emit("receive_message", payload, room=room_name)
@@ -272,5 +289,5 @@ async def handle_send_landmarks(sid, data):
                     }, room=f"user_{receiver_id}")
                     logger.info(f"🔔 [알림 전송] {sender_id} -> user_{receiver_id}")
                 
-            except Exception as e:
-                logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")
+        except Exception as e:
+            logger.error(f"❌ [소켓 에러] 메시지 처리 실패: {e}")

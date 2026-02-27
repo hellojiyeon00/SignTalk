@@ -8,6 +8,9 @@ const videoLoading = document.getElementById("videoLoading");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const statusText = document.getElementById("statusText");
+const cameraControls = document.getElementById("cameraControls");
+const translationResult = document.getElementById("translationResult");
+const translationInput = document.getElementById("translationInput");
 
 // ===== 상태 =====
 let stream = null;
@@ -197,7 +200,6 @@ function closeCamera() {
     console.log("📷 [Camera] Close Camera")
     
     isCapturing = false;
-
     hideLoading();
 
     if (stream) {
@@ -205,8 +207,60 @@ function closeCamera() {
         stream = null;
     }
     video.srcObject = null;
+    video.style.display = "block"; // 다음 오픈을 위해 복구
+    cameraControls.classList.remove("hidden"); // 제어 버튼 복구
+    translationResult.classList.add("hidden"); // 결과창 초기화
+
     modal.style.display = "none";
     overlay.style.display = "none";
 }
 
 closeBtn.addEventListener("click", closeCamera);
+
+// ===== 번역 결과 수신 및 자동 처리 =====
+socket.on("translation_result", (data) => {
+    console.log("📤 [Socket] 번역 결과 수신:", data.message);
+    onTranslationComplete(data);
+});
+
+// 번역 완료 처리: '번역 완료' 표시 → 카메라 종료 → 입력창에 텍스트 입력
+function onTranslationComplete(data) {
+    
+    // 1. 로딩바 숨기기
+    hideLoading();
+
+    // 2. 카메라 제어 영역과 비디오 숨기기
+    if (cameraControls) cameraControls.classList.add("hidden");
+    if (video) video.style.display = "none"; // 비디오를 아예 안보이게 처리
+    statusText.textContent = "";
+
+    // 3. 번역 결과 입력창 표시
+    const resultText = data.message;
+    if (translationInput && translationResult) {
+        translationInput.value = resultText;
+        translationResult.classList.remove("hidden");
+        
+        // 입력창에 포커스 (약간의 지연시간을 주어 렌더링 후 실행되게 함)
+        setTimeout(() => translationInput.focus(), 50);
+    }
+
+    console.log("✅ [Camera] 번역 완료 → 결과 표시");
+}
+
+// ===== 모달 내 전송 버튼 =====
+function sendTranslation() {
+    const text = translationInput.value.trim();
+    if (!text) return;
+
+    // Socket.IO 전송(랜드마크 전송 중단)
+    socket.emit("send_translation", {
+        room: currentRoomName,
+        room_id: currentRoomId,
+        username: myId,
+        message: text,
+    });
+
+    console.log(`📤 [Socket] 전송: ${text}`);
+
+    closeCamera();
+}

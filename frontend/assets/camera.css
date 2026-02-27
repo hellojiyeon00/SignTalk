@@ -175,6 +175,60 @@
     font-weight: bold;
 }
 
+/* ===== 번역 결과 영역 ===== */
+.translation-result {
+    margin-top: 15px;
+    text-align: center;
+    padding: 10px;
+    background: #f8f9fa; /* 배경색을 살짝 주어 구분 */
+    border-radius: 8px;
+}
+
+.translation-label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #007bff; /* 파란색으로 변경하여 신뢰감 부여 */
+    margin-bottom: 8px;
+}
+
+.translation-input {
+    display: flex;
+    gap: 5px; /* messageInput과 동일한 간격 */
+    justify-content: center;
+    align-items: center;
+}
+
+.translation-input input {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #ddd; /* messageInput과 동일한 보더 */
+    border-radius: 20px; /* 동그란 디자인 통일 */
+    font-size: 14px;
+    outline: none;
+    background: white;
+}
+
+.translation-input input:focus {
+    border-color: #007bff;
+}
+
+#translationSendBtn {
+    padding: 10px 20px;
+    background-color: #007bff; /* 채팅 전송 버튼과 동일한 파란색 */
+    color: white;
+    border: none;
+    border-radius: 20px; /* 버튼도 동그랗게 */
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+#translationSendBtn:hover {
+    background: #0b7dda;
+}
+
 /* 수어 카메라 버튼 스타일 */
 #signCameraBtn {
     background-color: #007bff;
@@ -189,4 +243,9 @@
 
 #signCameraBtn:hover {
     background: #0b7dda;
+}
+
+/* 숨김 클래스 */
+.hidden {
+    display: none !important;
 }
