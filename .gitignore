@@ -141,6 +141,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.vscode/
 .env
 .venv
 env/
@@ -221,7 +222,5 @@ pip-selfcheck.json
 # Ignore all local history of files
 .history
 .ionide
-
 pdf/
-
 image/
