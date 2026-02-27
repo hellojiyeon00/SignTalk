@@ -23,9 +23,10 @@ def get_model_bundle() -> Dict[str, Any]:
     if _MODEL_BUNDLE is not None:
         return _MODEL_BUNDLE
     
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    model_path = os.path.join(base_dir, "assets", "fasttext", "cc.ko.300.bin")
-
+    model_path = os.getenv("FASTTEXT_MODEL_PATH")
+    if not model_path:
+        raise RuntimeError("FASTTEXT_MODEL_PATH is not set")
+    
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"fastText model not found: {model_path}")
     

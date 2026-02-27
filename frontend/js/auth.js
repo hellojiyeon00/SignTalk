@@ -2,7 +2,7 @@
  * 인증 관련 기능 (로그인/회원가입)
  */
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "http://localhost:8010";
 
 // 유효성 검사 규칙
 const validators = {
