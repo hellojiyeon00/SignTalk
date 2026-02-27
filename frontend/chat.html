@@ -116,17 +116,26 @@
 
             <div id="videoLoading" class="video-loading hidden">
                 <div class="loader4" aria-label="loading"></div>
+                <p style="color: white; margin-top: 10px;">번역 중입니다...</p>
             </div>
         </div>
 
         <!-- 🎮 제어 버튼 -->
-        <div class="camera-controls">
+        <div class="camera-controls" id="cameraControls">
             <button id="startBtn">▶️ 시작</button>
             <button id="stopBtn" disabled>⏹️ 종료</button>
         </div>
 
         <!-- 상태 표시 -->
         <div id="statusText"></div>
+
+        <!-- 번역 결과 -->
+        <div class="translation-result hidden" id="translationResult">
+            <div class="translation-input">
+                <input type="text" id="translationInput" placeholder="번역된 텍스트" onkeypress="if(event.keyCode==13) sendTranslation()">
+                <button id="translationSendBtn" onclick="sendTranslation()">전송</button>
+            </div>
+        </div>
     </div>
 
     <div id="settingsModal" class="modal-overlay" style="display:none;">

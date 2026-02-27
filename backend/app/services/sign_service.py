@@ -46,7 +46,6 @@ async def call_sign2text(data):
                     if korean_text and all_landmarks:
                         # 한국 시간 (KST = UTC+9)
                         KST = timezone(timedelta(hours=9))
-                        now_kst = datetime.now(KST).strftime("%H:%M")
                         v_talk_date = datetime.now(KST).isoformat()
 
                         # 하둡 전송
@@ -73,7 +72,7 @@ async def call_sign2text(data):
                         
                         # 세션 정리
                         await clear_session(room_id, sender_id)
-                        return {"message": korean_text, "time": now_kst}
+                        return korean_text
 
                 else:
                     logger.error(f"❌ [Model Server] 응답 실패 (Code: {resp.status_code})")
