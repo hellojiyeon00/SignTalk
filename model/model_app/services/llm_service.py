@@ -26,7 +26,7 @@ async def translate_gloss2text(gloss_list):
     try:
         logger.info(f"🤖 [LLM] 문장 변환 요청: {gloss_content}")
 
-        response = client.chat.completions.create(
+        """response = client.chat.completions.create(
             model=settings.LLM_MODEL,
             messages=[
                 {
@@ -45,7 +45,7 @@ async def translate_gloss2text(gloss_list):
             temperature=0.3 # 일관된 답변을 위해 낮은 자유도 설정
         )
 
-        # final_text = response.choices[0].message.content.strip()
+        final_text = response.choices[0].message.content.strip()"""
         final_text = "안녕하세요!"
         logger.info(f"✅ [LLM] 변환 완료: {final_text}")
         

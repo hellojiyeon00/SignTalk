@@ -509,5 +509,5 @@ async def handle_send_translation(sid, data):
                     }, room=f"user_{receiver_id}")
                     logger.info(f"🔔 [알림 전송] {sender_id} -> user_{receiver_id}")
                 
-            except Exception as e:
-                logger.exception("❌ [소켓 에러] 메시지 처리 실패")
+        except Exception as e:
+            logger.exception("❌ [소켓 에러] 메시지 처리 실패")
