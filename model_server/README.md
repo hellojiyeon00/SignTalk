@@ -69,8 +69,8 @@ FastAPI 기반 단일 엔트리 구조이며, Service Layer와 완전히 분리�
 
 ## 1️⃣ Conda 환경 생성
 
-    conda create -n signtalk-py39 python=3.9 -y
-    conda activate signtalk-py39
+    conda create -n SignTalk python=3.9 -y
+    conda activate SignTalk
 
 ---
 
