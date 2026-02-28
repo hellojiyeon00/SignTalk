@@ -57,11 +57,68 @@
     color: #f44336;
 }
 
+/* ===== 비디오 + 로딩 오버레이 래퍼 ===== */
+.camera-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
 #videoInput {
     border: 2px solid #ddd;
     border-radius: 8px;
     background: #000;
     transform: scaleX(-1);
+    width: 480px;
+    height: 360px;
+    object-fit: cover;
+}
+
+/* ===== 비디오 위에 덮이는 로딩 레이어 ===== */
+.video-loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    border-radius: 8px; /* ✅ video와 동일하게 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    z-index: 10;
+
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* 숨김 상태 */
+.video-loading.hidden {
+    display: none;
+}
+
+.loader4 {
+  position: relative;
+  width: 220px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.loader4::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: rgba(255, 255, 255, 0.9);
+  animation: loader4Fill 1.2s ease-in-out infinite;
+}
+
+@keyframes loader4Fill {
+  0%   { width: 0%;   opacity: 1; }
+  70%  { width: 100%; opacity: 1; }
+  100% { width: 100%; opacity: 0; }
 }
 
 .camera-controls {
@@ -118,6 +175,60 @@
     font-weight: bold;
 }
 
+/* ===== 번역 결과 영역 ===== */
+.translation-result {
+    margin-top: 15px;
+    text-align: center;
+    padding: 10px;
+    background: #f8f9fa; /* 배경색을 살짝 주어 구분 */
+    border-radius: 8px;
+}
+
+.translation-label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #007bff; /* 파란색으로 변경하여 신뢰감 부여 */
+    margin-bottom: 8px;
+}
+
+.translation-input {
+    display: flex;
+    gap: 5px; /* messageInput과 동일한 간격 */
+    justify-content: center;
+    align-items: center;
+}
+
+.translation-input input {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #ddd; /* messageInput과 동일한 보더 */
+    border-radius: 20px; /* 동그란 디자인 통일 */
+    font-size: 14px;
+    outline: none;
+    background: white;
+}
+
+.translation-input input:focus {
+    border-color: #007bff;
+}
+
+#translationSendBtn {
+    padding: 10px 20px;
+    background-color: #007bff; /* 채팅 전송 버튼과 동일한 파란색 */
+    color: white;
+    border: none;
+    border-radius: 20px; /* 버튼도 동그랗게 */
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+#translationSendBtn:hover {
+    background: #0b7dda;
+}
+
 /* 수어 카메라 버튼 스타일 */
 #signCameraBtn {
     background-color: #007bff;
@@ -132,4 +243,9 @@
 
 #signCameraBtn:hover {
     background: #0b7dda;
+}
+
+/* 숨김 클래스 */
+.hidden {
+    display: none !important;
 }

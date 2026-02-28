@@ -4,7 +4,6 @@
  */
 
 const BASE_URL = "http://localhost:8010";
-
 const myId = localStorage.getItem("userId");
 const myName = localStorage.getItem("userName");
 const accessToken = localStorage.getItem("accessToken");
