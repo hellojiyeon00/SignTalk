@@ -3,6 +3,8 @@ const openBtn = document.getElementById("signCameraBtn");
 const closeBtn = document.getElementById("closeCameraBtn");
 const modal = document.getElementById("cameraModal");
 const overlay = document.getElementById("cameraOverlay");
+const videoFileInput = document.getElementById("videoFileInput");
+const selectFileBtn = document.getElementById("selectFileBtn");
 const video = document.getElementById("videoInput");
 const videoLoading = document.getElementById("videoLoading");
 const startBtn = document.getElementById("startBtn");
@@ -18,6 +20,8 @@ let holistic = null;
 let isCapturing = false;
 let frameCount = 0;
 let currentSendPromise = null;
+let isFileMode = false;
+let fileObjectURL = null;
 
 // ===== 인덱스 =====
 const POSE_LANDMARKS_IDX = [11, 12, 13, 14, 15, 16];
@@ -105,6 +109,15 @@ openBtn.addEventListener("click", async () => {
         return;
     }
 
+    isFileMode = false; // 웹캠 모드로 전환
+    video.src = "";     // 파일 경로 제거
+    video.style.transform = "scaleX(-1)"; // 웹캠은 다시 거울 모드로
+
+    if (fileObjectURL) {
+        URL.revokeObjectURL(fileObjectURL);
+        fileObjectURL = null;
+    }
+
     console.log("📷 [Camera] Open Camera")
     statusText.textContent = "카메라 준비 중...";
 
@@ -156,8 +169,29 @@ startBtn.addEventListener("click", () => {
     stopBtn.disabled = false;
     statusText.classList.remove("active");
 
+    // 파일 모드일 경우 영상 처음부터 재생
+    if (isFileMode) {
+        video.currentTime = 0;
+        video.play();
+
+        // 영상이 끝나면 자동으로 중지 처리
+        video.onended = () => {
+            console.log("📁 [File] 영상 재생 완료 → 자동 중지");
+            stopBtn.click();
+        };
+    }
+
     async function loop() {
         if (!isCapturing) return;
+
+        // 파일 모드에서 영상이 끝난 경우 루프 종료
+        if (isFileMode && video.ended) return;
+
+        // 영상이 일시정지 상태면 다음 프레임까지 대기
+        if (isFileMode && video.paused) {
+            requestAnimationFrame(loop);
+            return;
+        }
 
         currentSendPromise = holistic.send({ image: video });
         await currentSendPromise;
@@ -176,6 +210,8 @@ stopBtn.addEventListener("click", async () => {
     console.log("📷 [Camera] Stop Send Landmarks")
 
     isCapturing = false;
+    if (isFileMode) video.pause(); // 파일 재생 중지
+
     stopBtn.disabled = true;
     statusText.textContent = "";
 
@@ -206,6 +242,9 @@ function closeCamera() {
         stream.getTracks().forEach(t => t.stop());
         stream = null;
     }
+
+    video.onended = null;
+
     video.srcObject = null;
     video.style.display = "block"; // 다음 오픈을 위해 복구
     cameraControls.classList.remove("hidden"); // 제어 버튼 복구
@@ -264,3 +303,60 @@ function sendTranslation() {
 
     closeCamera();
 }
+
+// 1. 📁 버튼 클릭 시 파일 선택창 열기
+selectFileBtn.addEventListener("click", () => {
+    videoFileInput.click();
+});
+
+// ===== 📁 파일 첨부 처리 =====
+videoFileInput.addEventListener("change", async () => {
+    // 파일 모드일 때는 정방향
+    video.style.transform = "scaleX(1)";
+    
+    const file = videoFileInput.files[0];
+    if (!file) return;
+
+    console.log("📁 [File] 영상 파일 선택:", file.name);
+
+    isFileMode = true;
+
+    // 기존 웹캠 스트림 종료
+    if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+    }
+
+    // 기존 Object URL 해제
+    if (fileObjectURL) {
+        URL.revokeObjectURL(fileObjectURL);
+        fileObjectURL = null;
+    }
+
+    // 파일을 video 태그에 로드
+    fileObjectURL = URL.createObjectURL(file);
+    video.srcObject = null;
+    video.src = fileObjectURL;
+    video.loop = false;
+    video.muted = true;
+
+    video.onloadedmetadata = async () => {
+        await video.play();
+        video.pause();  // 자동 재생 방지, 시작 버튼으로 제어
+
+        if (!holistic) initHolistic();
+
+        try {
+            await warmupHolistic();
+        } catch (e) {
+            console.warn("🔥 [MediaPipe] Warmup Failed:", e);
+        }
+
+        statusText.textContent = `📁 ${file.name} | 시작 버튼을 눌러주세요.`;
+        statusText.classList.add("active");
+        startBtn.disabled = false;
+    };
+
+    // input 초기화 (같은 파일 재선택 가능하도록)
+    videoFileInput.value = "";
+});
