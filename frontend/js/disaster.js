@@ -75,9 +75,19 @@ async function connectDisasterSSE() {
         disasterEventSource = await createSSEConnection(`${BASE_URL}/disaster/stream`, {
             // 재난문자 수신 이벤트
             disaster: (event) => {
-                const data = event.data;
+                let data = event.data;
+            // 🔥 SSE payload가 문자열로 오는 경우 JSON 파싱
+                if (typeof data === "string") {
+                    try {
+                        data = JSON.parse(data);
+                    } catch (e) {
+                        console.error("❌ [SSE] disaster payload JSON parse 실패:", e, data);
+                        return;
+                    }
+                }
+
                 console.log("🚨 [SSE] 재난문자 수신:", data);
-                
+                                
                 // 📍 지역 필터링 체크
                 if (!shouldReceiveDisaster(data.region)) {
                     return; // 필터링: 처리 중단
@@ -94,11 +104,15 @@ async function connectDisasterSSE() {
                 latestDisasterType = data.type_code;
                 unreadDisasterCount++;
                 
+                // model_server URL 매칭
+                const gloss = data.gloss || null;
+                const urls  = Array.isArray(data.urls) ? data.urls : [];
+
                 // 1) 우측 하단에 팝업(Toast) 띄우기 (등급 정보 + 이미지 포함)
                 showToast(data.message, data.type_code, data.type_name, data.disaster_type);
                 
                 // 2) 재난문자 전용 모달창에도 내용 추가하기 (등급 정보 + 이미지 포함)
-                addDisasterMessageToRoom(data.message, data.time, data.type_code, data.type_name, data.disaster_type);
+                addDisasterMessageToRoom(data.message, data.time, data.type_code, data.type_name, data.disaster_type, urls, gloss);
                 
                 // 3) 브라우저 알림 표시 (등급에 따른 제목)
                 const alertTitle = getDisasterTitle(data.type_code, data.type_name);
@@ -190,7 +204,7 @@ function showBrowserNotification(title, message, typeCode = 'EM') {
         
         // 안전안내(SA)만 5초 후 자동으로 알림 닫기
         if (typeCode === 'SA') {
-            setTimeout(() => notification.close(), 5000);
+            setTimeout(() => notification.close(), 12000);
         }
         // EX(위급), EM(긴급)은 사용자가 직접 닫을 때까지 유지
     }
@@ -279,6 +293,13 @@ function showToast(message, typeCode = 'EM', typeName = null, disasterType = nul
         : '';
     
     // 긴급/위급 재난은 이미지 표시
+    // let imageHtml = '';
+    // if ((typeCode === 'EX' || typeCode === 'EM' || typeCode === 'SA') && disasterType) {
+    //     const imagePath = getDisasterImage(disasterType);
+    //     imageHtml = `<img src="${imagePath}" alt="${disasterType}" style="width:100%; max-width:200px; height:auto; border-radius:8px; margin-bottom:10px; display:block;">`;
+    // }
+
+    // 긴급/위급/안전안내 재난은 기존 재난 이미지(disasterType)만 표시
     let imageHtml = '';
     if ((typeCode === 'EX' || typeCode === 'EM' || typeCode === 'SA') && disasterType) {
         const imagePath = getDisasterImage(disasterType);
@@ -359,7 +380,7 @@ function closeDisasterRoom() {
     document.getElementById("disasterModal").style.display = "none";
 }
 
-function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, disasterType = null) {
+function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, disasterType = null, urls = [], gloss = null) {
     /* 재난문자 모달에 메시지 추가 */
     const msgBox = document.getElementById("disasterMessages");
     const config = getDisasterConfig(typeCode);
@@ -381,15 +402,53 @@ function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, d
     `;
     
     // 긴급/위급/안전안내 재난은 이미지 표시
-    let imageHtml = '';
-    if ((typeCode === 'EX' || typeCode === 'EM' || typeCode === 'SA') && disasterType) {
-        const imagePath = getDisasterImage(disasterType);
-        console.log(`🖼️ [모달 이미지] 재난 유형: ${disasterType}, 경로: ${imagePath}`);
-        imageHtml = `<img src="${imagePath}" alt="${disasterType}" style="width:100%; max-width:300px; height:auto; border-radius:8px; margin-bottom:10px; display:block;" onerror="console.error('모달 이미지 로드 실패:', '${imagePath}'); this.style.display='none';">`;
-    } else {
-        console.log(`ℹ️ [모달 이미지] 표시 안 함 - 등급: ${typeCode}, 유형: ${disasterType}`);
+    // let imageHtml = '';
+    // if ((typeCode === 'EX' || typeCode === 'EM' || typeCode === 'SA') && disasterType) {
+    //     const imagePath = getDisasterImage(disasterType);
+    //     console.log(`🖼️ [모달 이미지] 재난 유형: ${disasterType}, 경로: ${imagePath}`);
+    //     imageHtml = `<img src="${imagePath}" alt="${disasterType}" style="width:100%; max-width:300px; height:auto; border-radius:8px; margin-bottom:10px; display:block;" onerror="console.error('모달 이미지 로드 실패:', '${imagePath}'); this.style.display='none';">`;
+    // } else {
+    //     console.log(`ℹ️ [모달 이미지] 표시 안 함 - 등급: ${typeCode}, 유형: ${disasterType}`);
+    // }
+
+    // SA만: urls 시퀀스(video) 우선, 그 외(EX/EM)는 기존 이미지 유지
+    let mediaHtml = "";
+
+    if (typeCode === "SA") {
+        const seqUrls = Array.isArray(urls)
+            ? urls.filter(u => typeof u === "string" && u.trim())
+            : [];
+
+            if (seqUrls.length > 0) {
+                mediaHtml = `
+                    <video
+                        class="disaster-seq-video"
+                        src="${seqUrls[0]}"
+                        data-idx="0"
+                        data-urls="${encodeURIComponent(JSON.stringify(seqUrls))}"
+                        controls
+                        autoplay
+                        muted
+                        playsinline
+                        style="width:100%; max-width:360px; height:auto; border-radius:8px; margin-bottom:10px; display:block;"
+                    ></video>
+                `;
+            } else {
+                console.log("ℹ️ [SA] urls 없음 → 영상 미표시(텍스트만)");
+                mediaHtml = "";
+            }
+            
+        } else {
+        // EX/EM: 기존 이미지 로직 그대로
+        if (disasterType) {
+            const imagePath = getDisasterImage(disasterType);
+            console.log(`🖼️ [모달 이미지] ${disasterType}, ${imagePath}`);
+            mediaHtml = `<img src="${imagePath}" alt="${disasterType}" style="width:100%; max-width:300px; height:auto; border-radius:8px; margin-bottom:10px; display:block;" onerror="console.error('모달 이미지 로드 실패:', '${imagePath}'); this.style.display='none';">`;
+        } else {
+            console.log(`ℹ️ [모달 이미지] 표시 안 함 - 등급: ${typeCode}, 유형: ${disasterType}`);
+        }
     }
-    
+        
     // 등급명(typeName)이 있으면 표시, 없으면 config의 기본 제목 사용
     const displayTitle = typeName || config.title;
     alertDiv.innerHTML = `
@@ -397,11 +456,33 @@ function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, d
             ${config.icon} ${displayTitle}
             <span style="font-weight: normal; color: #888; margin-left: 8px;">${time}</span>
         </div>
-        ${imageHtml}
+        ${mediaHtml}
         <div style="font-size: 14px; color: #333; line-height: 1.4;">${msg}</div>
     `;
     
     msgBox.appendChild(alertDiv);
+
+    // SA만: 영상 끝나면 다음 url로 자동 전환
+    if (typeCode === "SA") {
+        const videoEl = alertDiv.querySelector(".disaster-seq-video");
+        if (videoEl) {
+            videoEl.addEventListener("ended", () => {
+                try {
+                    const raw = videoEl.getAttribute("data-urls") || "";
+                    const list = raw ? JSON.parse(decodeURIComponent(raw)) : [];
+                    const current = parseInt(videoEl.getAttribute("data-idx") || "0", 10);
+                    const next = (current + 1) % list.length;
+
+                    videoEl.src = list[next];
+                    videoEl.setAttribute("data-idx", String(next));
+                    videoEl.play().catch(() => {});
+                } catch (err) {
+                    console.error("[SEQ ERROR]", err);
+                }
+            });
+        }
+    }
+
     
     // 새 문자가 오면 스크롤 맨 아래로 내리기
     msgBox.scrollTop = msgBox.scrollHeight;
