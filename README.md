@@ -94,6 +94,7 @@
 
 - FastAPI
 - Nginx
+- Docker / Docker Compose
 
 ### ✔ Frontend
 
@@ -119,31 +120,37 @@
 ```
 SignLanguageTalk/
 │
-├── backend/ (FastAPI)
-│   ├── app/
-│   │   ├── api/          # API 엔드포인트
-│   │   ├── core/         # 설정 및 보안
-│   │   ├── models/       # DB 스키마 (PostgreSQL)
-│   │   └── services/     # 핵심 비즈니스 로직 (AI 변환 등)
-│   └── main.py
+├── backend/               # FastAPI 백엔드
+│   └── app/
+│       ├── api/           # API 엔드포인트
+│       ├── core/          # 설정, DB, Redis 연결
+│       ├── models/        # SQLAlchemy ORM 모델
+│       └── services/      # 비즈니스 로직 (AI 변환, 재난문자 등)
 │
-├── frontend/ (HTML/JS)
-│   ├── assets/           # CSS, Images
-│   ├── js/               # Frontend logic
-│   ├── chat.html
-│   ├── index.html
-│   ├── login.html
-│   └── signup.html
+├── frontend/              # HTML/JS 프론트엔드
+│   ├── assets/            # CSS
+│   ├── js/                # JavaScript 로직
+│   └── *.html
 │
-├── data_pipeline/ (Spark / Airflow)
-│   ├── dags/             # Airflow DAGs
-│   └── scripts/          # Spark processing scripts
+├── model/                 # Model App — LSTM 수어 인식 (FastAPI)
+│   ├── model_app/         # FastAPI 앱
+│   └── LSTM/              # 모델 가중치 (lstm.pt, label.csv)
 │
-├── ai_models/ (PyTorch / KoBART)
-│   ├── training/         # 학습 스크립트
-│   └── weights/          # 모델 가중치 저장소
+├── model_server/          # Model Server — KoBART + FastText (FastAPI)
+│   ├── models/            # 추론 로직 (kobart/, fasttext/)
+│   └── assets/            # 모델 가중치 ⚠️ 별도 배치 필요
+│       ├── kobart/        # KoBART 체크포인트 (~473MB)
+│       └── fasttext/      # FastText 임베딩 cc.ko.300.bin (~6.8GB)
 │
-├── requirements.txt
+├── data_pipeline/         # Airflow DAGs + Spark 스크립트
+├── hadoop/                # Hadoop App — HDFS 연동 (FastAPI)
+├── ai_models/             # 모델 학습 스크립트
+├── postgres/              # DB 초기화 SQL (init.sql — 컨테이너 최초 기동 시 자동 실행)
+│
+├── nginx.conf             # nginx 리버스 프록시 설정
+├── docker-compose.yml
+├── .env                   # 환경변수 ⚠️ git 제외 — .env.example 참고
+├── .env.example           # 환경변수 템플릿
 └── README.md
 ```
 
@@ -201,7 +208,41 @@ cd SignLanguageTalk
 
 ---
 
-### STEP 2 — 인프라 서비스 먼저 기동 (PostgreSQL · Redis · Kafka)
+### STEP 2 — 환경변수 및 모델 가중치 설정
+
+#### .env 파일 설정
+
+`.env`는 git에 포함되지 않습니다. `.env.example`을 복사해 값을 채워주세요.
+
+```bash
+cp .env.example .env
+```
+
+반드시 직접 발급해야 하는 API 키:
+
+| 항목 | 발급처 |
+|---|---|
+| `KAKAO_REST_API_KEY` | [Kakao Developers](https://developers.kakao.com) |
+| `DISASTER_SERVICE_KEY` | [재난안전데이터공유플랫폼](https://www.safetydata.go.kr) |
+| `LLM_API_KEY` (Gemini) | [Google AI Studio](https://aistudio.google.com) |
+
+> **재난문자 API 주의**: 발급 후 서비스 페이지에서 **서버 IP를 등록**해야 합니다.
+
+#### 모델 가중치 파일 배치
+
+아래 파일들은 용량이 크거나 저작권 이슈로 git에 포함되지 않습니다.  
+팀 내부 별도 경로(Google Drive 등)에서 받아 배치하세요.
+
+| 파일 | 크기 | 배치 경로 |
+|---|---|---|
+| `cc.ko.300.bin` | ~6.8GB | `model_server/assets/fasttext/` |
+| KoBART 체크포인트 | ~473MB | `model_server/assets/kobart/final_model_checkpoint-17800/` |
+
+> `model/LSTM/lstm.pt` (31MB)는 git에 포함되어 있어 별도 배치 불필요
+
+---
+
+### STEP 3 — 인프라 서비스 먼저 기동 (PostgreSQL · Redis · Kafka)
 
 ```bash
 # 3개 서비스 먼저 실행
@@ -230,10 +271,10 @@ docker exec -it signtalk-kafka \
 
 ---
 
-### STEP 3 — DB 스키마 자동 생성
+### STEP 4 — DB 스키마 자동 생성
 
 `postgres/init.sql`이 PostgreSQL 컨테이너 최초 기동 시 **자동으로 실행**됩니다.  
-별도 DDL 실행 없이 STEP 2 완료 후 모든 테이블과 초기 데이터가 생성됩니다.
+별도 DDL 실행 없이 STEP 3 완료 후 모든 테이블과 초기 데이터가 생성됩니다.
 
 ```bash
 # 테이블 생성 확인
@@ -245,7 +286,7 @@ docker exec -it signtalk-postgres \
 
 ---
 
-### STEP 4 — 애플리케이션 서비스 빌드 및 실행
+### STEP 5 — 애플리케이션 서비스 빌드 및 실행
 
 ```bash
 # 이미지 빌드
@@ -260,7 +301,7 @@ docker compose ps
 
 ---
 
-### STEP 5 — Airflow 실행
+### STEP 6 — Airflow 실행
 
 ```bash
 # Airflow 이미지 빌드
@@ -352,3 +393,9 @@ docker compose logs -f --tail=100 backend
 
 
 ## 9. 📌 향후 계획
+
+- 수어 인식 정확도 향상 (추가 데이터 수집 및 모델 고도화)
+- 모바일 환경 지원 (반응형 UI 개선)
+- 실시간 영상 통화 기반 수어 통역 기능
+- 재난문자 수어 영상 자동 생성 파이프라인 완성
+- 사용자 피드백 기반 번역 품질 개선 시스템
