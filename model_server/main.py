@@ -52,6 +52,7 @@ def infer(task: str, req: InferRequest):
 
     try:
         result = handler(req.model_dump())
+
         if result is None:
             raise RuntimeError(f"handler for task '{task}' returned None")
 

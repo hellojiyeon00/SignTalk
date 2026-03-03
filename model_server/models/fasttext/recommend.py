@@ -203,7 +203,7 @@ def recommend_by_similarity(token: str, top_k: int = 5) -> List[Tuple[str, float
     return scored[: max(1, top_k)]   
 
 
-def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65):
+def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65, replace_on: bool = False):
     initialize_cache()
 
     safe_tokens = [
@@ -232,20 +232,42 @@ def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65):
             for (w, s, url) in candidates
         ]
 
+        # * 문제사항: top-1을 best로 고정시킴
+        # 의사결정은 여전히 top-1 단일 강제 채택(임계치만 통과하면) 구조
         best = cand_list[0]
-        if best["score"] >= threshold:
+
+        # 관측용: 항상 suggested 제공
+        suggested_word = best["word"]
+        suggested_score = best["score"]
+        suggested_url = best["url"]
+
+        # 치환용(best)은 replace_on=True일 때만 채움
+        if replace_on and suggested_score >= threshold:
             results[t] = {
-                "best": best["word"],
-                "score": best["score"],
-                "url": best["url"],
+                "best": suggested_word,
+                "score": suggested_score,
+                "url": suggested_url,
+                "suggested": {
+                    "word": suggested_word,
+                    "score": suggested_score,
+                    "url": suggested_url,
+                },
                 "candidates": cand_list,
+                "decision": "REPLACED"
             }
+
         else:
             results[t] = {
                 "best": None,
-                "score": best["score"],
+                "score": suggested_score,  # 참고용 스코어(1등 후보)
                 "url": None,
+                "suggested": {
+                    "word": suggested_word,
+                    "score": suggested_score,
+                    "url": suggested_url,
+                },
                 "candidates": cand_list,
+                "decision": "OBSERVE_ONLY"
             }
 
     return {
@@ -254,9 +276,8 @@ def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65):
             "note": "fasttext (DB cache cosine top_k)",
             "top_k": top_k,
             "threshold": threshold,
-            "corpus_size": len(_CORPUS_CACHE),
+            "replace_on": replace_on,
+            "corpus_size": len(_CORPUS_CACHE)
         },
     }
-
-
 
