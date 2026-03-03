@@ -8,6 +8,10 @@ from aiokafka import AIOKafkaConsumer # 비동기 Kafka 컨슈머 라이브러�
 
 from app.core.config import settings
 
+# 안전 문자 처리 관련
+from starlette.concurrency import run_in_threadpool
+from app.services.chat_service import ChatService
+
 # 서버 터미널에 로그를 예쁘게 찍기 위한 설정입니다.
 logger = logging.getLogger("disaster_service")
 
@@ -220,10 +224,38 @@ class DisasterService:
                         break
                     
                     logger.info(f"📤 [SSE] 재난문자 전송 (user_id: {user_id})")
+
+                    # SA(안전안내)면 채팅과 동일한 파이프라인 결과(gloss/urls/miss)를 payload에 그대로 붙인다
+                    if isinstance(disaster_data, dict) and disaster_data.get("type_code") == "SA":
+                        text = disaster_data.get("message", "")
+                        res = await run_in_threadpool(ChatService.text_to_gloss_and_urls_sync, text)
+
+                        if isinstance(res, dict):
+                            # gloss: str | None
+                            disaster_data["gloss"] = res.get("gloss") if isinstance(res.get("gloss"), str) else None
+                            
+                            # urls: list[str] 강제 (프론트 <video> 시퀀스 안정화)
+                            raw_urls = res.get("urls") or []
+                            if isinstance(raw_urls, str):
+                                urls = [raw_urls]
+                            elif isinstance(raw_urls, list):
+                                urls = [u for u in raw_urls if isinstance(u, str) and u.strip()]
+                            else:
+                                urls = []
+                            disaster_data["urls"] = urls
+
+                            # miss: list 강제
+                            raw_miss = res.get("miss") or []
+                            disaster_data["miss"] = raw_miss if isinstance(raw_miss, list) else []
+                        else:
+                            disaster_data["gloss"] = None
+                            disaster_data["urls"] = []
+                            disaster_data["miss"] = []
+
                     yield {
                         "event": "disaster",
                         "id": disaster_data["id"],
-                        "data": disaster_data
+                        "data": json.dumps(disaster_data, ensure_ascii=False)
                     }
                     
                 except asyncio.TimeoutError:

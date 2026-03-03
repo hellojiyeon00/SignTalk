@@ -10,6 +10,9 @@ from sse_starlette.sse import EventSourceResponse
 from app.services.disaster_service import DisasterService
 from app.api.auth import verify_token
 
+from datetime import datetime
+from starlette.concurrency import run_in_threadpool
+
 # 단방향 통신을 위한 SSE 라우터 생성(Socket.IO은 양방향 통신이므로 별도의 라우터로 분리) 
 
 router = APIRouter()
@@ -43,11 +46,10 @@ async def disaster_stream(
         # 재난문자 스트림 생성기에서 이벤트를 비동기로 읽어와서 클라이언트로 전송
         async for event in DisasterService.generate_disaster_stream(current_user_id, request):
             # 데이터를 JSON 문자열로 변환
-            if "data" in event and isinstance(event["data"], dict):
-                event["data"] = json.dumps(event["data"])
-                
+            # if "data" in event and isinstance(event["data"], dict):
+            #     event["data"] = json.dumps(event["data"])
+
             # return 대신 yield 사용(return은 함수 종료, yield는 이벤트를 하나씩 생성하여 스트림 유지)
             yield event
     
     return EventSourceResponse(event_generator())
-
