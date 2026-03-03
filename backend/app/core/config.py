@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # API 엔드포인트 설정
     MODEL_API_URL: str  # 모델 서버 URL
     HADOOP_API_URL: str  # Hadoop 서버 URL
+
+    # 개발/디버그 설정
+    DEBUG: bool = False  # true 시 테스트 라우터 활성화
     
     @property
     def DATABASE_URL(self) -> str:

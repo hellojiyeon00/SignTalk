@@ -1,5 +1,3 @@
-**/backend_env/
-
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,python,linux,venv
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,python,linux,venv
 
@@ -223,4 +221,50 @@ pip-selfcheck.json
 .history
 .ionide
 pdf/
-image/
+# image/
+
+# =========================
+# Model Weights / Checkpoints
+# =========================
+assets/
+*.bin
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+
+# =========================
+# HuggingFace / Transformers Cache
+# =========================
+.cache/
+.huggingface/
+transformers_cache/
+
+# =========================
+# Logs & Runtime
+# =========================
+logs/
+log/
+*.log
+*.pid
+*.sock
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE
+# =========================
+.idea/
+
+# =========================
+# Misc
+# =========================
+*.tmp
+*.temp
+conda-meta/
+
+path/

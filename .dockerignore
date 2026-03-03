@@ -1,0 +1,25 @@
+# Git
+.git
+.gitignore
+
+# 가상환경
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# 모델 가중치 (볼륨으로 주입)
+model_server/assets/
+model/LSTM/*.pt
+model/LSTM/*.h5
+
+# 환경 파일 (docker-compose env_file로 주입)
+.env
+
+# 기타
+path/
+image/
+pdf/
+*.log
+*.pid
+README.md

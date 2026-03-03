@@ -2,6 +2,7 @@
 
 Socket.IO를 지원하는 채팅 서버 설정
 """
+import os as _os
 import asyncio
 import socketio
 from fastapi import FastAPI
@@ -16,6 +17,7 @@ from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.disaster import router as disaster_router
 from app.api.location import router as location_router
+from app.core.config import settings
 from app.api.sockets import sio
 from app.services.disaster_service import DisasterService
 
@@ -26,9 +28,8 @@ logging.basicConfig(level=logging.INFO)
 async def lifespan(app: FastAPI):
     # ===== 시작 시 =====
 
-    # Redis
-    redis = await get_redis()  # Redis 연결
-    # 연결 확인
+    # Redis 연결
+    redis = await get_redis()
     try:
         await redis.ping()
         logger.info("✅ Redis 연결됨")
@@ -36,11 +37,17 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Redis 연결 실패: {e}")
         raise
 
+    # Kafka 재난문자 리스너 백그라운드 시작
+    import app.services.disaster_service as ds
+    ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
+
     yield
 
     # ===== 종료 시 =====
+    logger.info("🛑 서버 종료 시작...")
+    await DisasterService.stop_disaster_listener()
     await close_redis()
-    print("✅ Redis 연결 종료")
+    logger.info("✅ 서버 종료 완료")
 
 # FastAPI 앱 생성
 app = FastAPI(title="Chat API", version="1.0.0", lifespan=lifespan)
@@ -59,29 +66,17 @@ app.include_router(chat_router, prefix="/chat", tags=["채팅"]) # 채팅 관련
 app.include_router(disaster_router, prefix="/disaster", tags=["재난문자"]) # 재난문자 관련 API는 /disaster 경로로 접근
 app.include_router(location_router, prefix="/location", tags=["위치"]) # 위치 관련 API는 /location 경로로 접근
 
+# 테스트 라우터 — DEBUG 모드일 때만 등록
+if getattr(settings, "DEBUG", False):
+    from app.api.test_disaster import router as test_disaster_router
+    app.include_router(test_disaster_router, prefix="/disaster/test", tags=["테스트"])
+    logger.info("🧪 DEBUG 모드: /disaster/test 테스트 라우터 활성화")
+
 # 재난 이미지 정적 파일 서빙
-app.mount("/images", StaticFiles(directory="../image"), name="images")
+# Docker WORKDIR=/app 기준 → ./image 폴더 (볼륨으로 마운트)
 
-# 서버 시작 시 실행할 초기화 작업 (비동기)
-@app.on_event("startup") 
-async def startup_event():
-    # SSE 재난문자 리스너를 백그라운드에서 가동
-    from app.services.disaster_service import kafka_listener_task
-    import app.services.disaster_service as ds
-    ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
-
-# 서버 종료 시 실행할 정리 작업 (비동기)
-@app.on_event("shutdown")
-async def shutdown_event():
-    """서버 종료 시 모든 연결과 리소스를 정리합니다."""
-    import logging
-    logger = logging.getLogger("main")
-    logger.info("🛑 서버 종료 시작...")
-    
-    # Kafka 리스너 및 SSE 연결 정리
-    await DisasterService.stop_disaster_listener()
-    
-    logger.info("✅ 서버 종료 완료")
+if _os.path.isdir("image"):
+    app.mount("/images", StaticFiles(directory="image"), name="images")
 
 # Socket.IO 통합 - app과 sio를 연결하여 Socket.IO 서버로 FastAPI 앱을 감쌈
 app = socketio.ASGIApp(sio, app)

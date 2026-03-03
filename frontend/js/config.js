@@ -7,7 +7,7 @@
 
 const CONFIG = {
     // API 서버 기본 URL
-    API_BASE_URL: "http://localhost:8000",
+    API_BASE_URL: "",
     
     // 외부 CDN 및 라이브러리 URL
     SOCKET_IO_CDN: "https://cdn.socket.io/4.0.0/socket.io.min.js",

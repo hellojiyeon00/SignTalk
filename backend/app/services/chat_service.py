@@ -347,12 +347,12 @@ class ChatService:
         if room_id:
             return {"room_id": room_id, "message": "이미 존재하는 채팅방입니다."}
 
-        # SQL: 채팅방 생성 (talk_room_id는 시퀀스에서 자동 생성, create_user는 my_id)
+        # SQL: 채팅방 생성 (talk_room_id는 SERIAL 자동 생성)
         create_room_sql = text("""
             INSERT INTO multicampus_schema.talk_room (
-                talk_room_id, member_no1, member_no2, create_user
+                member_no1, member_no2, create_user
             ) VALUES (
-                nextval('multicampus_schema.talk_room_id_s'), :m1, :m2, :creator
+                :m1, :m2, :creator
             ) RETURNING talk_room_id
         """)
         

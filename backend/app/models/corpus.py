@@ -11,6 +11,8 @@ class Corpus(Base):
     url_path = Column(String, nullable=False)  # 수어 영상 URL 또는 업로드된 mp4 경로/파일명 
     vector = Column(Text, nullable=False)      # 단어의 특징점 Vector 데이터 
     
+    meaning_classification = Column(String, nullable=True)  # 의미 분류
+
     # 메타 정보
     create_user = Column(String(50), nullable=False) 
     create_date = Column(TIMESTAMP(timezone=False), nullable=False, server_default=func.now()) 

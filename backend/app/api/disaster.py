@@ -50,4 +50,3 @@ async def disaster_stream(
             yield event
     
     return EventSourceResponse(event_generator())
-

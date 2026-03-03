@@ -1,0 +1,244 @@
+version: "3.9"
+
+networks:
+  signtalk-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  airflow_logs:
+
+services:
+
+  # ────────────────────────────────────────────────────────────────
+  # 인프라
+  # ────────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: signtalk-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgres/corpus_202603031716.csv:/docker-entrypoint-initdb.d/corpus.csv:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - signtalk-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    container_name: signtalk-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - signtalk-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka (KRaft 모드 — Zookeeper 불필요)
+  kafka:
+    image: apache/kafka:4.0.0
+    container_name: signtalk-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    ports:
+      - "9092:9092"
+    networks:
+      - signtalk-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ────────────────────────────────────────────────────────────────
+  # Airflow (공통 설정 앵커)
+  # ────────────────────────────────────────────────────────────────
+
+  x-airflow-common: &airflow-common
+    build:
+      context: .
+      dockerfile: data_pipeline/Dockerfile
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Seoul
+    volumes:
+      # DAG 파일 + 수집 스크립트가 모두 data_pipeline/ 에 위치
+      - ./data_pipeline:/opt/airflow/dags:ro
+      - airflow_logs:/opt/airflow/logs
+    networks:
+      - signtalk-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # DB 초기화 (최초 1회만 실행 후 종료)
+  airflow-init:
+    <<: *airflow-common
+    container_name: signtalk-airflow-init
+    entrypoint:
+      - bash
+      - -c
+      - >-
+        airflow db migrate &&
+        airflow users create
+        --username admin
+        --password "${AIRFLOW_ADMIN_PASSWORD}"
+        --firstname Admin
+        --lastname User
+        --role Admin
+        --email admin@signtalk.local
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: signtalk-airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: signtalk-airflow-scheduler
+    command: scheduler
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ────────────────────────────────────────────────────────────────
+  # 애플리케이션
+  # ────────────────────────────────────────────────────────────────
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: signtalk-backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    networks:
+      - signtalk-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./image:/app/image:ro
+    restart: unless-stopped
+
+  model-app:
+    build:
+      context: .
+      dockerfile: model/Dockerfile
+    container_name: signtalk-model-app
+    env_file: .env
+    ports:
+      - "8001:8001"
+    networks:
+      - signtalk-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      # 호스트의 model/LSTM/ → 컨테이너 /app/model/LSTM/
+      - ./model/LSTM:/app/model/LSTM:ro
+    restart: unless-stopped
+
+  model-server:
+    build:
+      context: .
+      dockerfile: model_server/Dockerfile
+    container_name: signtalk-model-server
+    env_file: .env
+    ports:
+      - "8002:8002"
+    networks:
+      - signtalk-net
+    volumes:
+      # 호스트의 model_server/assets/ → 컨테이너 /app/assets/
+      - ./model_server/assets:/app/assets:ro
+    restart: unless-stopped
+
+  hadoop-app:
+    build:
+      context: .
+      dockerfile: hadoop/Dockerfile
+    container_name: signtalk-hadoop-app
+    env_file: .env
+    ports:
+      - "8003:8003"
+    networks:
+      - signtalk-net
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────────────────────────
+  # 프론트엔드
+  # ────────────────────────────────────────────────────────────────
+
+  nginx:
+    image: nginx:alpine
+    container_name: signtalk-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - signtalk-net
+    depends_on:
+      - backend
+    restart: unless-stopped

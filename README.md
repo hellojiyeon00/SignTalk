@@ -157,28 +157,198 @@ SignLanguageTalk/
 
 ---
 
-## 8. ⚙️ 설치 방법
+## 8. ⚙️ 설치 및 실행 방법 (Docker)
 
-### 1) 저장소 클론
+> 모든 서비스는 Docker Compose로 관리됩니다.  
+> 아래 단계를 **순서대로** 진행하세요.
+
+---
+
+### STEP 0 — Docker 설치 (Ubuntu 기준, 미설치 시)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list
+
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
+
+#### sudo 없이 Docker 사용하기
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+---
+
+### STEP 1 — 저장소 클론 및 프로젝트 디렉토리 이동
 
 ```bash
 git clone https://github.com/hellojiyeon00/SignLanguageTalk.git
 cd SignLanguageTalk
 ```
 
-### 2) 가상환경 생성
+---
+
+### STEP 2 — 인프라 서비스 먼저 기동 (PostgreSQL · Redis · Kafka)
 
 ```bash
-conda create -n <env_name>
-conda activate <env_name>
+# 3개 서비스 먼저 실행
+docker compose up -d postgres redis kafka
+
+# 상태 확인 — 모두 healthy 상태가 될 때까지 대기 (약 30초~1분)
+docker compose ps
 ```
 
-### 3) 패키지 설치
+#### 각 서비스 정상 동작 확인
 
 ```bash
-pip install -r requirements.txt
+# PostgreSQL 접속 및 스키마 확인
+docker exec -it signtalk-postgres \
+  psql -U multicampus_user -d multicampus_db -c "\dt multicampus_schema.*"
+
+# Redis 연결 확인
+docker exec -it signtalk-redis \
+  redis-cli -a rediscci4 ping
+# 정상: PONG
+
+# Kafka 토픽 목록 확인
+docker exec -it signtalk-kafka \
+  /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
 ```
 
 ---
+
+### STEP 3 — DB 스키마 자동 생성
+
+`postgres/init.sql`이 PostgreSQL 컨테이너 최초 기동 시 **자동으로 실행**됩니다.  
+별도 DDL 실행 없이 STEP 2 완료 후 모든 테이블과 초기 데이터가 생성됩니다.
+
+```bash
+# 테이블 생성 확인
+docker exec -it signtalk-postgres \
+  psql -U multicampus_user -d multicampus_db -c "\dt multicampus_schema.*"
+```
+
+> `docker compose down -v`로 볼륨을 삭제한 뒤 재기동해도 `init.sql`이 자동 재실행됩니다.
+
+---
+
+### STEP 4 — 애플리케이션 서비스 빌드 및 실행
+
+```bash
+# 이미지 빌드
+docker compose build backend model-app model-server hadoop-app
+
+# 서비스 실행 (Airflow 제외)
+docker compose up -d backend model-app model-server hadoop-app nginx
+
+# 전체 상태 확인
+docker compose ps
+```
+
+---
+
+### STEP 5 — Airflow 실행
+
+```bash
+# Airflow 이미지 빌드
+docker compose build airflow-webserver
+
+# 초기화 (최초 1회만 — admin 계정 생성)
+docker compose up airflow-init
+
+# 웹서버 및 스케줄러 실행
+docker compose up -d airflow-webserver airflow-scheduler
+```
+
+> Airflow UI: http://localhost:8080
+
+---
+
+### 서비스 포트 정보
+
+| 서비스 | 포트 | 비고 |
+|---|---|---|
+| Frontend (nginx) | 80 | 메인 진입점 |
+| Backend (FastAPI) | 8000 | REST API |
+| Model App (LSTM) | 8001 | 수어 인식 모델 |
+| Model Server (KoBART + FastText) | 8002 | 텍스트 변환 모델 |
+| Hadoop App | 8003 | HDFS 연동 |
+| Airflow | 8080 | 파이프라인 관리 |
+| PostgreSQL | 5432 | |
+| Redis | 6379 | |
+| Kafka | 9092 | |
+
+> **+ 포트 변경 방법**
+>
+> - **브라우저 접속 포트(nginx)만 바꾸는 경우** → `docker-compose.yml` 한 곳만 수정
+>   ```yaml
+>   # 예: 80 → 9090으로 변경
+>   ports:
+>     - "9090:80"
+>   ```
+>   `frontend/js/config.js`의 `API_BASE_URL`이 `""`(빈 문자열)이므로 별도 수정 불필요
+>
+> - **내부 서비스 포트를 바꾸는 경우** → 아래 파일을 모두 같이 수정해야 함
+>   | 서비스 | 수정 파일 |
+>   |---|---|
+>   | backend | `docker-compose.yml` ports + `nginx.conf` proxy_pass 4곳 |
+>   | model-app / model-server | `docker-compose.yml` ports + `.env` MODEL_API_URL / MODEL_SERVER_URL |
+>   | hadoop-app | `docker-compose.yml` ports + `.env` HADOOP_API_URL |
+
+---
+
+### 전체 서비스 중지
+
+```bash
+# 컨테이너 중지 (데이터 유지)
+docker compose down
+
+# 컨테이너 + 볼륨 전체 삭제 (데이터 초기화)
+docker compose down -v
+```
+
+---
+
+### 전체 서비스 시작
+
+```bash
+# 컨테이너 시작
+docker compose up -d
+```
+
+---
+
+### 실시간 로그 확인
+
+```bash
+# 전체 서비스 로그 (실시간)
+docker compose logs -f
+
+# 특정 서비스 로그만 확인
+docker compose logs -f backend
+docker compose logs -f model-app
+docker compose logs -f model-server
+docker compose logs -f nginx
+docker compose logs -f airflow-webserver
+
+# 최근 N줄만 출력 후 실시간 추적
+docker compose logs -f --tail=100 backend
+```
+
+---
+
 
 ## 9. 📌 향후 계획
