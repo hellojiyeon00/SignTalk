@@ -51,7 +51,7 @@ class DisasterService:
                     group_id='disaster_consumer_group',     # 컨슈머 그룹 ID (필수) - 같은 그룹은 메시지를 나눠서 받습니다.
                     # 받은 데이터는 010101 같은 바이트(Byte) 형태이므로, 이를 파이썬 딕셔너리(JSON)로 자동 번역해 주는 기능입니다.
                     value_deserializer=lambda m: json.loads(m.decode('utf-8')), 
-                    auto_offset_reset='latest',             # 서버가 켜진 '지금 이 순간 이후'에 도착하는 새 문자만 받겠다는 뜻입니다.
+                    auto_offset_reset='earliest',           # 서버가 꺼진 동안 밀린 메시지를 마지막으로 읽은 지점부터 이어서 받습니다.
                     enable_auto_commit=True,                # 메시지를 읽었다는 처리(오프셋 커밋)를 자동으로 합니다.
                     request_timeout_ms=30000,               # 요청 타임아웃 30초
                     connections_max_idle_ms=540000          # 연결 유지 시간 9분

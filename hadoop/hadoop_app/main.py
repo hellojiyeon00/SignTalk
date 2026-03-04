@@ -17,14 +17,13 @@ async def lifespan(app: FastAPI):
     logger.info("="*70)
 
     # HDFS
-    hdfs = await get_hdfs()  # HDFS 연결
-    # 연결 확인
     try:
+        hdfs = await get_hdfs()
         hdfs.content('/')
         logger.info("✅ HDFS 연결됨")
     except Exception as e:
-        logger.error(f"❌ HDFS 연결 실패: {e}")
-        raise
+        logger.warning(f"⚠️  HDFS 연결 실패 (서버 미가동 또는 네트워크 문제): {e}")
+        logger.warning("⚠️  HDFS 없이 서버를 시작합니다. HDFS 관련 API는 동작하지 않습니다.")
 
     yield
 

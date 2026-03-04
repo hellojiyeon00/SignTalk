@@ -202,8 +202,8 @@ newgrp docker
 ### STEP 1 — 저장소 클론 및 프로젝트 디렉토리 이동
 
 ```bash
-git clone https://github.com/hellojiyeon00/SignLanguageTalk.git
-cd SignLanguageTalk
+git clone https://github.com/hellojiyeon00/SignTalk.git
+cd SignTalk
 ```
 
 ---
@@ -242,13 +242,14 @@ cp .env.example .env
 
 ---
 
-### STEP 3 — 인프라 서비스 먼저 기동 (PostgreSQL · Redis · Kafka)
+### STEP 3 — 인프라 서비스 먼저 기동 (PostgreSQL · Redis · Kafka · Hadoop)
 
 ```bash
-# 3개 서비스 먼저 실행
-docker compose up -d postgres redis kafka
+# 인프라 서비스 먼저 실행
+docker compose up -d postgres redis kafka hadoop
 
-# 상태 확인 — 모두 healthy 상태가 될 때까지 대기 (약 30초~1분)
+# 상태 확인 — 모두 healthy 상태가 될 때까지 대기 (약 1~2분)
+# hadoop은 NameNode 초기화로 다른 서비스보다 오래 걸릴 수 있습니다
 docker compose ps
 ```
 
@@ -267,6 +268,10 @@ docker exec -it signtalk-redis \
 # Kafka 토픽 목록 확인
 docker exec -it signtalk-kafka \
   /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+# Hadoop WebHDFS 확인
+curl -s "http://localhost:9870/webhdfs/v1/?op=LISTSTATUS&user.name=hadoop"
+# 정상: {"FileStatuses":...}
 ```
 
 ---
@@ -327,6 +332,7 @@ docker compose up -d airflow-webserver airflow-scheduler
 | Model App (LSTM) | 8001 | 수어 인식 모델 |
 | Model Server (KoBART + FastText) | 8002 | 텍스트 변환 모델 |
 | Hadoop App | 8003 | HDFS 연동 |
+| Hadoop NameNode (WebHDFS) | 9870 | HDFS Web UI / WebHDFS API |
 | Airflow | 8080 | 파이프라인 관리 |
 | PostgreSQL | 5432 | |
 | Redis | 6379 | |
@@ -383,6 +389,7 @@ docker compose logs -f backend
 docker compose logs -f model-app
 docker compose logs -f model-server
 docker compose logs -f nginx
+docker compose logs -f hadoop
 docker compose logs -f airflow-webserver
 
 # 최근 N줄만 출력 후 실시간 추적
