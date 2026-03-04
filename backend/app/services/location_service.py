@@ -2,10 +2,14 @@
 
 Kakao Map API를 사용한 역지오코딩 비즈니스 로직
 """
+import logging
+
 import httpx
 from fastapi import HTTPException
 from app.core.config import settings
 from app.api.schemas import AddressResponse
+
+logger = logging.getLogger(__name__)
 
 
 class LocationService:
@@ -48,12 +52,9 @@ class LocationService:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=headers, params=params)
                 
-                # 응답 상태 코드 로깅
-                print(f"Kakao API Response Status: {response.status_code}")
-                
                 if response.status_code != 200:
                     error_body = response.text
-                    print(f"Kakao API Error Response: {error_body}")
+                    logger.error(f"Kakao API 오류 [{response.status_code}]: {error_body}")
                     
                     # 403 오류 시 친절한 메시지
                     if response.status_code == 403:

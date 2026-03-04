@@ -14,6 +14,8 @@ logger = logging.getLogger("disaster_service")
 # aiokafka의 상세 로그 숨기기 (에러만 표시)
 logging.getLogger("aiokafka").setLevel(logging.WARNING)
 
+KAFKA_TOPIC = 'Topic_characters'
+
 # 연결된 모든 클라이언트의 큐 목록 (브로드캐스트용)
 # connected_clients = []
 connected_clients = {}
@@ -46,7 +48,7 @@ class DisasterService:
             try:
                 # 1. Kafka 우체국에서 데이터를 꺼내올 '구독자(Consumer)' 객체를 만듭니다.
                 kafka_consumer = AIOKafkaConsumer(
-                    'Topic_characters',                     # 창주님이 만든 Kafka 우체통(토픽) 이름입니다.
+                    KAFKA_TOPIC,                     # 창주님이 만든 Kafka 우체통(토픽) 이름입니다.
                     bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,     # Kafka 서버의 주소와 포트입니다.
                     group_id='disaster_consumer_group',     # 컨슈머 그룹 ID (필수) - 같은 그룹은 메시지를 나눠서 받습니다.
                     # 받은 데이터는 010101 같은 바이트(Byte) 형태이므로, 이를 파이썬 딕셔너리(JSON)로 자동 번역해 주는 기능입니다.

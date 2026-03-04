@@ -24,7 +24,6 @@ ENV_PATH = REPO_ROOT / ".env"
 
 load_dotenv(dotenv_path=ENV_PATH, override=False)
 
-print("[ENV CHECK]", "KOBART_MODEL_DIR=", os.getenv("KOBART_MODEL_DIR"), "KOBART_CHECKPOINT=", os.getenv("KOBART_CHECKPOINT"))
 
 from model_server.registry import get_handler
 

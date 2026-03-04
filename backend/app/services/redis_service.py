@@ -25,10 +25,6 @@ async def push_frame(room_id, sender_id, landmarks):
     # TTL 갱신(메모리 누수 방지)
     await redis.expire(key, TTL)
 
-    # ✅ 저장 확인 (디버깅용)
-    length = await redis.llen(key)
-    print(f"[DEBUG] Redis key={key} 저장 완료. 현재 프레임 수: {length}")
-
 # ===== Redis 작업 =====
 async def get_frames(room_id, sender_id):
     """Redis에 저장된 프레임 반환"""

@@ -2,7 +2,7 @@
 
 친구 검색, 채팅방 생성/조회, 대화 내역 조회 기능 제공
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -34,7 +34,6 @@ def get_or_create_room(
 ):
     """채팅방 생성 또는 기존 방 조회 (JWT 토큰 필수)"""
     # 토큰의 user_id와 요청의 my_id가 일치하는지 확인
-    from fastapi import HTTPException, status
     if req.my_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

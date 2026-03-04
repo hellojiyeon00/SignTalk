@@ -67,20 +67,3 @@ def generate_gloss(
     decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return decoded.strip()
 
-
-# 참고(디버깅용 메모)
-# 1단계: 토크나이즈 (CPU, 원본 상태)
-# enc = tokenizer(
-#     text,
-#     return_tensors="pt",
-#     truncation=True,
-#     max_length=512
-# )
-#
-# # 🔎 여기서 자유롭게 디버깅 가능
-# print("token_len =", enc["input_ids"].shape[1])
-# print("tail =", tokenizer.decode(enc["input_ids"][0][-50:]))
-#
-# # 2단계: 모델 입력용으로 정리
-# enc.pop("token_type_ids", None)
-# model_inputs = {k: v.to(device) for k, v in enc.items()}
