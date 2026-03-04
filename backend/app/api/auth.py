@@ -9,9 +9,16 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 
 from app.core.database import get_db
-from app.api.schemas import UserSignup, UserLogin, UserUpdate, MessageResponse, TokenResponse, RefreshTokenRequest
+from app.core.redis_client import get_redis
+from app.api.schemas import (
+    UserSignup, UserLogin, UserUpdate, MessageResponse,
+    TokenResponse, RefreshTokenRequest,
+    EmailVerifyRequest, EmailCodeVerifyRequest,
+    PasswordResetSendRequest, PasswordResetRequest,
+)
 from app.core.config import settings
 from app.services.auth_service import AuthService
+from app.services.email_service import send_verification_email
 
 # 인증 API 라우터 생성
 router = APIRouter()
@@ -96,15 +103,129 @@ def create_refresh_token(data: dict) -> str:
 # DELETE: 웹 서버의 데이터 삭제
 # PATCH: 웹 서버의 데이터 일부 수정
 
+# ─── 이메일 인증 코드 발송 ─────────────────────────────────────────
+@router.post("/send-verify-email", response_model=MessageResponse)
+async def send_verify_email(data: EmailVerifyRequest):
+    """이메일로 6자리 인증 코드 발송 (5분 유효)"""
+    redis = await get_redis()
+
+    # 중복 가입 방지: 이미 DB에 같은 이메일이 있는지는 signup에서 처리하므로 여기선 스킵
+    # 1분 이내 재요청 방지 (스팸 방지용 쿨다운)
+    cooldown_key = f"email_cooldown:{data.email}"
+    if await redis.get(cooldown_key):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="1분 후 다시 시도해주세요."
+        )
+
+    try:
+        code = await send_verification_email(str(data.email))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"메일 발송 실패: {e}"
+        )
+
+    # Redis에 코드 저장 (TTL 5분)
+    await redis.set(f"email_code:{data.email}", code, ex=300)
+    # 쿨다운 60초 설정
+    await redis.set(cooldown_key, "1", ex=60)
+
+    return {"message": "인증 코드가 발송되었습니다."}
+
+
+# ─── 이메일 인증 코드 확인 ─────────────────────────────────────────
+@router.post("/verify-email-code", response_model=MessageResponse)
+async def verify_email_code(data: EmailCodeVerifyRequest):
+    """사용자가 입력한 인증 코드 확인"""
+    redis = await get_redis()
+
+    saved_code = await redis.get(f"email_code:{data.email}")
+
+    if not saved_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="인증 코드가 만료되었거나 존재하지 않습니다. 다시 발송해주세요."
+        )
+
+    if saved_code != data.code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="인증 코드가 일치하지 않습니다."
+        )
+
+    # 인증 완료 표시 (TTL 10분 — 이 안에 회원가입 완료해야 함)
+    await redis.set(f"email_verified:{data.email}", "1", ex=600)
+    # 사용한 코드 즉시 삭제 (재사용 방지)
+    await redis.delete(f"email_code:{data.email}")
+
+    return {"message": "이메일 인증이 완료되었습니다."}
+
+
 # @router.post("/signup"): POST로 요청하면 회원가입 처리
 # status_code=status.HTTP_201_CREATED: 성공 시 201 Created 상태 코드 반환
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=MessageResponse)
-def signup(user_data: UserSignup, db: Session = Depends(get_db)):
-    """회원가입"""
-    
-    # 회원가입 처리 - auth_service에 있는 AuthService의 create_user 메서드 호출
+async def signup(user_data: UserSignup, db: Session = Depends(get_db)):
+    """회원가입 (이메일 인증 필수)"""
+    # 이메일 인증 완료 여부 컨폭여 확인
+    redis = await get_redis()
+    verified = await redis.get(f"email_verified:{user_data.email}")
+    if not verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이메일 인증이 필요합니다."
+        )
+
+    # 회원가입 처리
     AuthService.create_user(db, user_data)
+
+    # 인증 토큰 삭제 (재사용 방지)
+    await redis.delete(f"email_verified:{user_data.email}")
+
     return {"message": "가입을 환영합니다!"}
+
+
+# ─── 비밀번호 재설정 코드 발송 ────────────────────────────────────────
+@router.post("/send-reset-email", response_model=MessageResponse)
+async def send_reset_email(data: PasswordResetSendRequest, db: Session = Depends(get_db)):
+    """아이디 + 이메일 일치 확인 후 재설정 코드 발송 (5분 유효)"""
+    if not AuthService.verify_user_email(db, data.user_id, str(data.email)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="아이디 또는 이메일이 일치하지 않습니다.")
+
+    redis = await get_redis()
+    cooldown_key = f"reset_cooldown:{data.email}"
+    if await redis.get(cooldown_key):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="1분 후 다시 시도해주세요.")
+
+    try:
+        code = await send_verification_email(str(data.email))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"메일 발송 실패: {e}")
+
+    await redis.set(f"reset_code:{data.email}", code, ex=300)
+    await redis.set(cooldown_key, "1", ex=60)
+    return {"message": "인증 코드가 발송되었습니다."}
+
+
+# ─── 비밀번호 재설정 ────────────────────────────────────────────────
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(data: PasswordResetRequest, db: Session = Depends(get_db)):
+    """인증 코드 확인 후 비밀번호 변경"""
+    redis = await get_redis()
+    saved_code = await redis.get(f"reset_code:{data.email}")
+    if not saved_code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="인증 코드가 만료되었거나 존재하지 않습니다. 다시 발송해주세요.")
+    if saved_code != data.code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="인증 코드가 일치하지 않습니다.")
+
+    AuthService.reset_password_by_email(db, str(data.email), data.new_password)
+    await redis.delete(f"reset_code:{data.email}")
+    return {"message": "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요."}
 
 
 # @router.post("/login"): POST로 요청하면 로그인 처리

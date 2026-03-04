@@ -78,6 +78,27 @@ class CoordinatesRequest(BaseModel):
 class AddressResponse(BaseModel):
     """주소 변환 응답"""
     address: str = Field(..., description="전체 주소")
-    region_1depth: str = Field(..., description="시/도")
-    region_2depth: str = Field(..., description="구/군")
-    region_3depth: str = Field(..., description="동/읍/면")
+
+
+class PasswordResetSendRequest(BaseModel):
+    """비밀번호 재설정 코드 발송 요청"""
+    user_id: str = Field(..., description="아이디")
+    email: EmailStr = Field(..., description="가입 시 등록한 이메일")
+
+
+class PasswordResetRequest(BaseModel):
+    """비밀번호 재설정 요청"""
+    email: EmailStr = Field(..., description="인증 완료된 이메일")
+    code: str = Field(..., min_length=6, max_length=6, description="6자리 인증 코드")
+    new_password: str = Field(..., min_length=8, description="새 비밀번호")
+
+
+class EmailVerifyRequest(BaseModel):
+    """인증 코드 발송 요청"""
+    email: EmailStr = Field(..., description="인증 코드를 받을 이메일 주소")
+
+
+class EmailCodeVerifyRequest(BaseModel):
+    """인증 코드 확인 요청"""
+    email: EmailStr = Field(..., description="인증한 이메일 주소")
+    code: str = Field(..., min_length=6, max_length=6, description="6자리 인증 코드")

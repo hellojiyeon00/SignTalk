@@ -79,6 +79,29 @@ body {
     background-color: var(--primary-hover);
 }
 
+.btn-secondary {
+    padding: 10px 14px;
+    background-color: var(--white);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.btn-secondary:hover {
+    background-color: var(--primary-color);
+    color: var(--white);
+}
+
+.btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* --- 라디오 버튼 스타일 --- */
 .radio-container {
     display: flex;

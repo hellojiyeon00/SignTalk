@@ -165,6 +165,36 @@ class AuthService:
             raise e
 
     @staticmethod
+    def verify_user_email(db: Session, user_id: str, email: str) -> bool:
+        """아이디와 이메일이 일치하는 회원인지 확인"""
+        sql = text("""
+            SELECT 1 FROM multicampus_schema.member
+            WHERE member_id = :id
+              AND e_mail_address = :email
+              AND delete_date IS NULL
+        """)
+        result = db.execute(sql, {"id": user_id, "email": email}).fetchone()
+        return result is not None
+
+    @staticmethod
+    def reset_password_by_email(db: Session, email: str, new_password: str):
+        """이메일로 비밀번호 재설정"""
+        sql = text("""
+            UPDATE multicampus_schema.member
+            SET passwd = crypt(:pw, gen_salt('bf')),
+                update_date = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul',
+                update_user = e_mail_address
+            WHERE e_mail_address = :email
+              AND delete_date IS NULL
+        """)
+        try:
+            db.execute(sql, {"pw": new_password, "email": email})
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+
+    @staticmethod
     def delete_user(db: Session, user_id: str):
         """회원 탈퇴 (소프트 삭제)
         

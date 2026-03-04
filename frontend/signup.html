@@ -39,8 +39,21 @@
 
             <div class="input-group">
                 <label for="signupEmail">이메일</label>
-                <input type="email" id="signupEmail" placeholder="example@email.com" autocomplete="email" required>
-                <p class="error-message">이메일 형식이 올바르지 않습니다.</p>
+                <div style="display: flex; gap: 8px;">
+                    <input type="email" id="signupEmail" placeholder="example@email.com" autocomplete="email" required style="flex: 1;">
+                    <button type="button" id="sendCodeBtn" class="btn-secondary">인증 코드 발송</button>
+                </div>
+                <p class="error-message" id="emailError">이메일 형식이 올바르지 않습니다.</p>
+            </div>
+
+            <div class="input-group" id="codeGroup" style="display: none;">
+                <label for="verifyCode">인증 코드</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="verifyCode" placeholder="6자리 숫자 입력" maxlength="6" style="flex: 1; letter-spacing: 4px;">
+                    <button type="button" id="verifyCodeBtn" class="btn-secondary">확인</button>
+                </div>
+                <p class="error-message" id="codeError"></p>
+                <p id="verifiedMsg" style="display:none; color:#27ae60; font-size:0.85rem; margin-top:4px;">✅ 이메일 인증 완료</p>
             </div>
 
             <div class="input-group" style="margin-top: 20px;">
@@ -67,6 +80,6 @@
     </div>
 
     <script src="js/config.js"></script>
-    <script src="js/auth.js" defer></script>
+    <script src="js/auth.js?v=3"></script>
 </body>
 </html>

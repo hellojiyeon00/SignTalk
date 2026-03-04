@@ -31,10 +31,53 @@
             <p style="color: #666;">계정이 없으신가요? 
                 <a href="signup.html" style="color: var(--primary-color); font-weight: bold; text-decoration: none;">회원가입</a>
             </p>
+            <p style="margin-top: 6px;">
+                <a href="#" id="showResetBtn" style="color: #888; text-decoration: none; font-size: 0.85rem;">비밀번호를 잊으셨나요?</a>
+            </p>
+        </div>
+
+        <!-- 비밀번호 재설정 영역 (기본 숨김) -->
+        <div id="resetSection" style="display:none; margin-top: 24px; border-top: 1px solid #eee; padding-top: 20px;">
+            <h3 style="text-align:center; margin-bottom: 16px; font-size: 1rem; color: #444;">비밀번호 재설정</h3>
+
+            <div class="input-group">
+                <label for="resetId">아이디</label>
+                <input type="text" id="resetId" placeholder="가입할 때 사용한 아이디">
+            </div>
+
+            <div class="input-group">
+                <label for="resetEmail">이메일</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="email" id="resetEmail" placeholder="가입할 때 등록한 이메일" style="flex:1;">
+                    <button type="button" id="resetSendCodeBtn" class="btn-secondary" style="white-space:nowrap;">인증 코드 발송</button>
+                </div>
+                <span id="resetEmailError" class="error-message" style="display:none;"></span>
+            </div>
+
+            <div class="input-group" id="resetCodeGroup" style="display:none;">
+                <label for="resetVerifyCode">인증 코드</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="resetVerifyCode" placeholder="6자리 코드 입력" maxlength="6" style="flex:1;">
+                    <button type="button" id="resetVerifyCodeBtn" class="btn-secondary">확인</button>
+                </div>
+                <span id="resetCodeError" class="error-message" style="display:none;"></span>
+                <span id="resetVerifiedMsg" style="display:none; color:green; font-size:0.85rem; margin-top:4px;">✓ 인증 완료</span>
+            </div>
+
+            <div class="input-group" id="resetNewPwGroup" style="display:none;">
+                <label for="resetNewPw">새 비밀번호</label>
+                <input type="password" id="resetNewPw" placeholder="8자 이상">
+                <label for="resetNewPwConfirm" style="margin-top:8px;">새 비밀번호 확인</label>
+                <input type="password" id="resetNewPwConfirm" placeholder="비밀번호 재입력">
+                <span id="resetPwError" class="error-message" style="display:none;"></span>
+            </div>
+
+            <button type="button" id="resetSubmitBtn" class="btn-primary" style="display:none; margin-top:8px;">비밀번호 변경</button>
+            <p id="resetGlobalError" class="error-message" style="display:none; text-align:center;"></p>
         </div>
     </div>
 
     <script src="js/config.js"></script>
-    <script src="js/auth.js" defer></script>
+    <script src="js/auth.js?v=2" defer></script>
 </body>
 </html>

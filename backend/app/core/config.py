@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     MODEL_API_URL: str  # 모델 서버 URL
     HADOOP_API_URL: str  # Hadoop 서버 URL
 
+    # SMTP (Gmail) 설정
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+
     # 개발/디버그 설정
     DEBUG: bool = False  # true 시 테스트 라우터 활성화
     
