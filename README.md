@@ -373,7 +373,7 @@ docker compose down -v
 
 ```bash
 # 컨테이너 시작
-docker compose up -d
+docker compose up -d --build
 ```
 
 ---
