@@ -9,9 +9,12 @@ main.py
 from __future__ import annotations
 
 import os
+import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from starlette.concurrency import run_in_threadpool
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -73,20 +76,43 @@ def health() -> dict:
 
 
 @app.post("/infer/{task}")
-def infer(task: str, req: InferRequest):
+async def infer(task: str, req: InferRequest):
+    t0 = time.time()
+
     handler = get_handler(task)
     if handler is None:
         raise HTTPException(status_code=404, detail=f"unknown task: {task}")
 
+    # fasttext 요청이면 tokens 길이도 함께 로깅
+    tokens_len = -1
     try:
-        result = handler(req.model_dump())
+        payload = req.payload or {}
+        toks = payload.get("tokens") if isinstance(payload, dict) else None
+        if isinstance(toks, list):
+            tokens_len = len(toks)
+    except Exception:
+        tokens_len = -1
 
+    logger.info("[infer] start task=%s tokens_len=%s", task, tokens_len)
+
+    try:
+        result = await run_in_threadpool(handler, req.model_dump())
         if result is None:
             raise RuntimeError(f"handler for task '{task}' returned None")
-
+        
+        logger.info(
+            "[infer] done task=%s elapsed_ms=%d",
+            task,
+            int((time.time() - t0) * 1000)
+        )
         return {"ok": True, "task": task, "result": result}
-
+    
     except Exception as e:
-        traceback.print_exc()
+        logger.exception(
+            "[infer] fail task=%s elapsed_ms=%d",
+            task,
+            int((time.time() - t0) * 1000)
+        )
         raise HTTPException(status_code=500, detail=str(e))
+
     

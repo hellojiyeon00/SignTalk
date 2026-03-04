@@ -167,6 +167,7 @@ def recommend_by_similarity(token: str, top_k: int = 5) -> List[Tuple[str, float
 
     반환: [(추천단어, 유사도, url_path), ...]
     """
+    t0 = time.time()
     if not _CACHE_LOADED:
         _load_corpus_cache()
 
@@ -200,7 +201,15 @@ def recommend_by_similarity(token: str, top_k: int = 5) -> List[Tuple[str, float
         scored.append((w, sim, url))
 
     scored.sort(key=lambda x: x[1], reverse=True)
-    return scored[: max(1, top_k)]   
+    out = scored[: max(1, top_k)]
+
+    # elapsed 로그 1줄
+    logger.info(
+        "[fasttext][similarity] token=%s top_k=%d corpus=%d elapsed_ms=%d",
+        q, int(top_k), len(_CORPUS_CACHE), int((time.time() - t0) * 1000)
+    )
+
+    return out
 
 
 def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65, replace_on: bool = False):
