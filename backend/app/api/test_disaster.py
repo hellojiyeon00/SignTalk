@@ -6,9 +6,8 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.api.auth import verify_token
 from app.services.disaster_service import connected_clients
 
 router = APIRouter()
@@ -16,7 +15,7 @@ logger = logging.getLogger("test_disaster")
 
 
 @router.post("/broadcast", summary="모의 재난문자 브로드캐스트 (테스트용)")
-async def test_broadcast(current_user_id: str = Depends(verify_token)):
+async def test_broadcast():
     """현재 SSE에 연결된 모든 클라이언트에게 모의 재난문자를 전송합니다.
 
     사용 방법:
