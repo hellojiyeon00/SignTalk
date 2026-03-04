@@ -26,10 +26,24 @@ connected_clients = {}
 kafka_consumer = None
 kafka_listener_task = None
 
+# =========================
+# ✅ [추가] Kafka 메시지 안전 파서 (JSON 아닌 payload 들어와도 리스너 안죽게)
+# =========================
+def _safe_value_deserializer(m: bytes):
+    try:
+        s = m.decode("utf-8", errors="replace").strip()
+        if not s:
+            return None
+        return json.loads(s)
+    except Exception:
+        return None
+
 class DisasterService:
-    
     @staticmethod
     async def start_disaster_listener():
+        # 
+        logger.warning(f"🔥 KAFKA_ENABLED 실제값 = {settings.KAFKA_ENABLED}")
+        logger.warning(f"🔥 KAFKA_BOOTSTRAP_SERVERS = {settings.KAFKA_BOOTSTRAP_SERVERS}")
         """
         [Kafka 리스너 함수]
         FastAPI 서버가 켜질 때 백그라운드에서 무한히 실행되며, 
@@ -54,7 +68,7 @@ class DisasterService:
                     bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,     # Kafka 서버의 주소와 포트입니다.
                     group_id='disaster_consumer_group',     # 컨슈머 그룹 ID (필수) - 같은 그룹은 메시지를 나눠서 받습니다.
                     # 받은 데이터는 010101 같은 바이트(Byte) 형태이므로, 이를 파이썬 딕셔너리(JSON)로 자동 번역해 주는 기능입니다.
-                    value_deserializer=lambda m: json.loads(m.decode('utf-8')), 
+                    value_deserializer=_safe_value_deserializer,
                     auto_offset_reset='latest',             # 서버가 켜진 '지금 이 순간 이후'에 도착하는 새 문자만 받겠다는 뜻입니다.
                     enable_auto_commit=True,                # 메시지를 읽었다는 처리(오프셋 커밋)를 자동으로 합니다.
                     request_timeout_ms=30000,               # 요청 타임아웃 30초
@@ -70,7 +84,11 @@ class DisasterService:
                 async for msg in kafka_consumer:
                     try:
                         # 편지가 도착하면 껍데기를 까서 안의 딕셔너리 데이터만 빼냅니다.
-                        data = msg.value 
+                        data = msg.value
+
+                        # ✅ [추가] JSON 파싱 실패/빈값(None)이면 스킵 (리스너 안죽게)
+                        if data is None:
+                            continue
                         
                         # 4. 한국 시간(KST)으로 현재 시간을 구합니다.
                         KST = timezone(timedelta(hours=9))
