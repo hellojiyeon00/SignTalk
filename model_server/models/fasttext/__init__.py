@@ -8,6 +8,7 @@ fastText 유사 단어 추천 엔트리
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict
 
 from .loader import get_model_bundle
@@ -25,6 +26,8 @@ def infer(req: Dict[str, Any]) -> Dict[str, Any]:
     - payload.tokens: ["KFC", "따뜻", ...]
     - (호환) text: "KFC 따뜻 햄버거"  -> split 해서 tokens 생성
     """
+    t0 = time.time()
+
     _ = get_model_bundle()
 
     payload = req.get("payload") or {}
@@ -47,9 +50,15 @@ def infer(req: Dict[str, Any]) -> Dict[str, Any]:
     threshold = payload.get("threshold", 0.65)
     replace_on = payload.get("replace_on", False)
 
-    return recommend(
-        tokens=tokens,
-        top_k=int(top_k),
-        threshold=float(threshold),
-        replace_on=bool(replace_on),
+    out = recommend(
+    tokens=tokens,
+    top_k=int(top_k),
+    threshold=float(threshold),
+    replace_on=bool(replace_on),
     )
+    print(
+        f"[fasttext.infer] done tokens_len={len(tokens)} top_k={int(top_k)} "
+        f"thr={float(threshold)} replace_on={bool(replace_on)} "
+        f"elapsed_ms={int((time.time() - t0) * 1000)}"
+    )
+    return out
