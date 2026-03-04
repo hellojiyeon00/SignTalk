@@ -419,36 +419,38 @@ function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, d
             ? urls.filter(u => typeof u === "string" && u.trim())
             : [];
 
-            if (seqUrls.length > 0) {
-                mediaHtml = `
-                    <video
-                        class="disaster-seq-video"
-                        src="${seqUrls[0]}"
-                        data-idx="0"
-                        data-urls="${encodeURIComponent(JSON.stringify(seqUrls))}"
-                        controls
-                        autoplay
-                        muted
-                        playsinline
-                        style="width:100%; max-width:360px; height:auto; border-radius:8px; margin-bottom:10px; display:block;"
-                    ></video>
-                `;
-            } else {
-                console.log("ℹ️ [SA] urls 없음 → 영상 미표시(텍스트만)");
-                mediaHtml = "";
-            }
-            
+        if (seqUrls.length > 0) {
+            mediaHtml = `
+                <video
+                    class="disaster-seq-video"
+                    src="${seqUrls[0]}"
+                    data-idx="0"
+                    data-urls="${encodeURIComponent(JSON.stringify(seqUrls))}"
+                    controls
+                    muted
+                    playsinline
+                    preload="metadata"
+                    style="width:100%; max-width:360px; border-radius:8px; margin-bottom:10px; display:block;"
+                ></video>
+            `;
         } else {
-        // EX/EM: 기존 이미지 로직 그대로
+            console.log("ℹ️ [SA] urls 없음 → 영상 미표시");
+            mediaHtml = "";
+        }
+    } else {
+        // EX/EM: 기존 이미지 유지
         if (disasterType) {
             const imagePath = getDisasterImage(disasterType);
-            console.log(`🖼️ [모달 이미지] ${disasterType}, ${imagePath}`);
-            mediaHtml = `<img src="${imagePath}" alt="${disasterType}" style="width:100%; max-width:300px; height:auto; border-radius:8px; margin-bottom:10px; display:block;" onerror="console.error('모달 이미지 로드 실패:', '${imagePath}'); this.style.display='none';">`;
-        } else {
-            console.log(`ℹ️ [모달 이미지] 표시 안 함 - 등급: ${typeCode}, 유형: ${disasterType}`);
+            mediaHtml = `
+                <img
+                    src="${imagePath}"
+                    alt="${disasterType}"
+                    style="width:100%; max-width:300px; border-radius:8px; margin-bottom:10px;"
+                >
+            `;
         }
     }
-        
+
     // 등급명(typeName)이 있으면 표시, 없으면 config의 기본 제목 사용
     const displayTitle = typeName || config.title;
     alertDiv.innerHTML = `
@@ -459,31 +461,86 @@ function addDisasterMessageToRoom(msg, time, typeCode = 'EM', typeName = null, d
         ${mediaHtml}
         <div style="font-size: 14px; color: #333; line-height: 1.4;">${msg}</div>
     `;
-    
+
     msgBox.appendChild(alertDiv);
 
-    // SA만: 영상 끝나면 다음 url로 자동 전환
+    // ✅ SA만: 끝나면 다음 영상으로 자동 재생 (버튼 없이, video 컨트롤로 시작)
     if (typeCode === "SA") {
         const videoEl = alertDiv.querySelector(".disaster-seq-video");
+
         if (videoEl) {
-            videoEl.addEventListener("ended", () => {
+            const getList = () => {
                 try {
                     const raw = videoEl.getAttribute("data-urls") || "";
-                    const list = raw ? JSON.parse(decodeURIComponent(raw)) : [];
-                    const current = parseInt(videoEl.getAttribute("data-idx") || "0", 10);
-                    const next = (current + 1) % list.length;
+                    return raw ? JSON.parse(decodeURIComponent(raw)) : [];
+                } catch (e) {
+                    console.error("❌ [SA] data-urls parse 실패:", e);
+                    return [];
+                }
+            };
 
-                    videoEl.src = list[next];
-                    videoEl.setAttribute("data-idx", String(next));
-                    videoEl.play().catch(() => {});
-                } catch (err) {
-                    console.error("[SEQ ERROR]", err);
+            const resetToFirst = () => {
+                const list = getList();
+                if (list.length === 0) return;
+
+                videoEl.setAttribute("data-idx", "0");
+                videoEl.src = list[0];
+                videoEl.load();          // 재생은 하지 않음(사용자가 ▶️ 누르면 0번부터 시작)
+                videoEl.currentTime = 0; // ✅ load() 뒤에 두는 게 안전
+            };
+
+            const playAt = (i) => {
+                const list = getList();
+                if (!list[i]) return;
+
+                videoEl.src = list[i];
+                videoEl.setAttribute("data-idx", String(i));
+
+                console.log("🎬 [SA] set src =", videoEl.src);
+
+                videoEl.load();
+                videoEl.play().catch((e) => {
+                    // 자동재생 정책/네트워크 문제 로그
+                    console.warn("❌ [SA] play() blocked/failed:", e);
+                });
+            };
+
+            videoEl.addEventListener("error", () => {
+                const list = getList();
+                const current = parseInt(videoEl.getAttribute("data-idx") || "0", 10);
+                const next = current + 1;
+
+                console.error("❌ [SA] video error:", videoEl.error, "src=", videoEl.src);
+
+                if (next < list.length) {
+                    playAt(next);
+                } else {
+                    console.log("✅ [SA] error로 시퀀스 종료 → 다음 재생을 위해 0번으로 리셋");
+                    resetToFirst();
                 }
             });
+
+            // 첫 재생은 사용자가 컨트롤 ▶️ 눌러서 시작
+            // 이후 ended 시점에만 다음 영상으로 자동 넘김
+            videoEl.addEventListener("ended", () => {
+                const list = getList();
+                const current = parseInt(videoEl.getAttribute("data-idx") || "0", 10);
+                const next = current + 1;
+
+                console.log("🎬 [SA] ended. current=", current, "next=", next, "len=", list.length);
+
+                if (next < list.length) {
+                    playAt(next);
+                    
+                } else {
+                    console.log("✅ [SA] 시퀀스 재생 완료 → 다음 재생을 위해 0번으로 리셋");
+                    resetToFirst();
+                }
+            });
+        } else {
+            console.log("ℹ️ [SA] videoEl not found");
         }
     }
-
-    
     // 새 문자가 오면 스크롤 맨 아래로 내리기
     msgBox.scrollTop = msgBox.scrollHeight;
 }
