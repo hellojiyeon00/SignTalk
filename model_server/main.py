@@ -61,13 +61,41 @@ def warmup_fasttext() -> None:
     - 첫 요청에서 발생하던 corpus 전량 로딩/벡터 파싱 비용을
       부팅 시점으로 이동시켜 timeout을 제거한다.
     """
+    # warmup 토글 (default: off)
+    if os.getenv("MODEL_WARMUP_FASTTEXT", "0") != "1":
+        logger.warning("[startup][fasttext] warm-up skipped (MODEL_WARMUP_FASTTEXT!=1)")
+        return
+    
+    t0 = time.time()
+    logger.warning("[startup][fasttext] warm-up start")
     try:
         from model_server.models.fasttext.loader import warmup_corpus_cache
 
         warmup_corpus_cache()
-        logger.info("[startup][fasttext] corpus cache warm-up done")
+        logger.warning("[startup][fasttext] warm-up done elapsed_ms=%d", int((time.time() - t0) * 1000))
     except Exception:
-        logger.exception("[startup][fasttext] corpus cache warm-up failed")
+        logger.exception("[startup][fasttext] warm-up failed elapsed_ms=%d", int((time.time() - t0) * 1000))
+
+
+@app.on_event("startup")
+def warmup_kobart() -> None:
+    """
+    서버 부팅 시 KoBART 1회 generate warm-up
+
+    - 첫 요청에서만 발생하는 generate 초기 지연(커널/캐시/그래프 준비 등)을
+      부팅 시점으로 이동시켜 E2E 첫 요청 latency를 제거한다.
+    """
+    try:
+        from model_server.models.kobart.loader import get_model_bundle
+        from model_server.models.kobart.generate import generate_gloss
+
+        bundle = get_model_bundle()
+        # 더미 입력은 짧게(토큰화/디코딩 최소화)
+        _ = generate_gloss(bundle, "웜업", top_k=1, max_new_tokens=8, num_beams=1)
+
+        logger.info("[startup][kobart] warm-up done")
+    except Exception:
+        logger.exception("[startup][kobart] warm-up failed")
 
 
 class InferRequest(BaseModel):
