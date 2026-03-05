@@ -56,6 +56,7 @@ class TokenResponse(BaseModel):
     token_type: str
     user_id: str
     user_name: str
+    user_no: int
 
 
 class RefreshTokenRequest(BaseModel):
