@@ -64,6 +64,10 @@ class ModelClient:
         timeout = httpx.Timeout(connect=3.0, read=self.timeout_sec, write=5.0, pool=5.0)
         self._client = httpx.Client(timeout=timeout, trust_env=False)
 
+        # async client도 재사용 (keep-alive)
+        atimeout = httpx.Timeout(connect=0.5, read=self.timeout_sec, write=2.0, pool=2.0)
+        self._aclient = httpx.AsyncClient(timeout=atimeout, trust_env=False)
+
     async def infer(self, task: str, text: str) -> Dict[str, Any]:
         """
         멀티 모델 단일 model_server 호출 (비동기)
@@ -76,13 +80,28 @@ class ModelClient:
             raise ValueError("text must be a non-empty string")
 
         url = f"{self.base_url}/infer/{task.strip()}"
-
-        timeout = httpx.Timeout(connect=0.5, read=self.timeout_sec, write=2.0, pool=2.0)
-        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
-            response = await client.post(url, json={"text": text}, headers={"X-Caller": "backend"})
-
+        response = await self._aclient.post(url, json={"text": text}, headers={"X-Caller": "backend"})
         response.raise_for_status()
         return response.json()
+    
+    def close(self) -> None:
+        try:
+            self._client.close()
+        except Exception:
+            pass
+        try:
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                loop.create_task(self._aclient.aclose())
+            else:
+                asyncio.run(self._aclient.aclose())
+        except Exception:
+            pass
 
     def infer_sync(self, task: str, text: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -124,16 +143,6 @@ class ModelClient:
 
         response.raise_for_status()
         return response.json()
-
-    def close(self) -> None:
-        """
-        내부 httpx client 리소스 정리.
-        (테스트/스크립트에서 유용. 서버 프로세스에서는 생략해도 보통 문제 없음)
-        """
-        try:
-            self._client.close()
-        except Exception:
-            pass
         
     def infer_payload_sync(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """

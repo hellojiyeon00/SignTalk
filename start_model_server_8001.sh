@@ -7,10 +7,6 @@ BASE_URL="http://127.0.0.1:${PORT}"
 
 echo "[start] Starting Model Server on ${HOST}:${PORT} ..."
 
-# startup warmup 토글 (main.py의 warmup 로직이 이 값으로 on/off 되는 구조)
-export MODEL_WARMUP_FASTTEXT=0
-
-# 서버 백그라운드 실행
 uvicorn model_server.main:app --host "${HOST}" --port "${PORT}" &
 PID=$!
 
@@ -20,7 +16,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 서버 준비 대기 (sleep 대신 포트/엔드포인트 응답으로 확인)
 echo "[wait] Waiting for server to be ready..."
 for i in {1..60}; do
   if curl -s "${BASE_URL}/docs" >/dev/null 2>&1; then
@@ -34,17 +29,26 @@ for i in {1..60}; do
   fi
 done
 
-echo "[warmup] Warming up KoBART ..."
-curl -s -X POST "${BASE_URL}/infer/kobart" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"테스트"}' >/dev/null
+# KoBART warmup (default ON)
+if [ "${WARMUP_KOBART:-1}" = "1" ]; then
+  echo "[warmup] Warming up KoBART ..."
+  curl -s -X POST "${BASE_URL}/infer/kobart" \
+    -H "Content-Type: application/json" \
+    -d '{"text":"테스트","payload":{"top_k":1,"max_new_tokens":8,"num_beams":1}}' >/dev/null
+else
+  echo "[warmup] KoBART warmup skipped"
+fi
 
-echo "[warmup] FastText first bundle load (~60s, only on cold start)..."
-curl -s -X POST "${BASE_URL}/infer/fasttext" \
-  -H "Content-Type: application/json" \
-  -d '{"tokens":["테스트"]}' >/dev/null
+# FastText warmup (default ON)
+if [ "${WARMUP_FASTTEXT:-1}" = "1" ]; then
+  echo "[warmup] FastText first bundle load (~60s)..."
+  curl -s -X POST "${BASE_URL}/infer/fasttext" \
+    -H "Content-Type: application/json" \
+    -d '{"payload":{"tokens":["테스트"],"top_k":10,"threshold":0.65,"replace_on":false}}' >/dev/null
+else
+  echo "[warmup] FastText warmup skipped"
+fi
 
 echo "[done] Warmup done. Model Server running (pid=${PID})."
 
-# foreground로 대기 (스크립트 종료되면 trap으로 서버도 같이 내려감)
 wait "${PID}"
