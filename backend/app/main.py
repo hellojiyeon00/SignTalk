@@ -32,6 +32,9 @@ async def lifespan(app: FastAPI):
     try:
         await redis.ping()
         logger.info("✅ Redis 연결됨")
+        #
+        import app.services.disaster_service as ds
+        ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
     except Exception as e:
         logger.error(f"❌ Redis 연결 실패: {e}")
         raise
@@ -63,12 +66,14 @@ app.include_router(location_router, prefix="/location", tags=["위치"]) # 위�
 app.mount("/images", StaticFiles(directory="../image"), name="images")
 
 # 서버 시작 시 실행할 초기화 작업 (비동기)
-@app.on_event("startup") 
-async def startup_event():
-    # SSE 재난문자 리스너를 백그라운드에서 가동
-    from app.services.disaster_service import kafka_listener_task
-    import app.services.disaster_service as ds
-    ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
+# @app.on_event("startup") 
+# async def startup_event():
+#     # SSE 재난문자 리스너를 백그라운드에서 가동
+#     from app.services.disaster_service import kafka_listener_task
+#     import app.services.disaster_service as ds
+    # ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
+
+
 
 # 서버 종료 시 실행할 정리 작업 (비동기)
 @app.on_event("shutdown")
