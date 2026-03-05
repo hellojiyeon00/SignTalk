@@ -15,6 +15,7 @@ from typing import Dict, List, Tuple, Any
 
 from sqlalchemy import create_engine, text
 from .loader import embed_token
+from sqlalchemy.exc import SQLAlchemyError
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,10 @@ logger = logging.getLogger(__name__)
 _CORPUS_CACHE: Dict[str, Tuple[str, List[float], float]] = {}
 _CACHE_LOADED: bool = False
 _CACHE_LOADED_AT: float | None = None
+
+# 요청 단위 계측용 전역 카운터
+_PGVECTOR_QUERY_COUNT: int = 0
+_RECOMMEND_CALL_COUNT: int = 0
 
 
 def _get_database_url() -> str:
@@ -159,6 +164,85 @@ def initialize_cache(force: bool = False) -> None:
     if _CACHE_LOADED and not force:
         return
     _load_corpus_cache()
+    
+
+def _vec_to_pgvector_literal(vec: List[float]) -> str:
+    return "[" + ",".join(f"{x:.8f}" for x in vec) + "]"
+
+
+def recommend_by_pgvector(token: str, top_k: int = 5) -> List[Tuple[str, float, str]]:
+    """
+    pgvector 기반 top-k (cosine distance)
+    번환: [(추천단어, 유사도, url_path), ...]
+    """
+    global _PGVECTOR_QUERY_COUNT
+    _PGVECTOR_QUERY_COUNT += 1
+    logger.warning("[fasttext] pgvector backend active")
+
+    t0 = time.time()
+
+    q = token.strip()
+    if not q:
+        return []
+    
+    q_vec = embed_token(q)
+    if not q_vec:
+        return []
+    
+    # 컬럼명은 환경변수로 받는다 (예: embedding)
+    col = os.getenv("FASTTEXT_PGVECTOR_COL")
+    if not col:
+        raise RuntimeError("FASTTEXT_PGVECTOR_COL is not set (e.g. embedding)")
+    
+    db_url = _get_database_url()
+    engine = create_engine(db_url, pool_pre_ping=True)
+
+    qvec_literal = _vec_to_pgvector_literal(q_vec)
+
+    sql = text(
+        f"""
+        SELECT word_name, url_path,
+                (1 - ({col} <=> '{qvec_literal}'::vector)) AS sim
+        FROM multicampus_schema.corpus
+        WHERE word_name IS NOT NULL
+            AND url_path IS NOT NULL
+            AND {col} IS NOT NULL
+            AND word_name <> :q
+        ORDER BY {col} <=> '{qvec_literal}'::vector
+        LIMIT :k
+        """
+    )
+
+    t_conn0 = time.time()
+    try:
+        with engine.connect() as conn:
+            connect_ms = int((time.time() - t_conn0) * 1000)
+
+            t_q0 = time.time()
+            rows = conn.execute(sql, {"k": int(top_k), "q": q}).fetchall()
+            query_ms = int((time.time() - t_q0) * 1000)
+
+    except SQLAlchemyError:
+        logger.exception("[fasttext][pgvector] query failed")
+        return []
+
+    logger.warning(
+        "[fasttext][pgvector][timing] token=%s dim=%d connect_ms=%d query_ms=%d rows=%d",
+        q, len(q_vec), connect_ms, query_ms, len(rows)
+    )
+
+    out: List[Tuple[str, float, str]] = []
+    for word_name, url_path, sim in rows:
+        try:
+            out.append((str(word_name), float(sim), str(url_path)))
+        except Exception:
+            continue
+
+    logger.info(
+        "[fasttext][pgvector] token=%s top_k=%d elapsed_ms=%d",
+        q, int(top_k), int((time.time() - t0) * 1000)
+    )
+    return out
 
 
 def recommend_by_similarity(token: str, top_k: int = 5) -> List[Tuple[str, float, str]]:
@@ -167,12 +251,18 @@ def recommend_by_similarity(token: str, top_k: int = 5) -> List[Tuple[str, float
 
     반환: [(추천단어, 유사도, url_path), ...]
     """
+    t0 = time.time()
     if not _CACHE_LOADED:
         _load_corpus_cache()
 
     q = token.strip()
     if not q:
         return []
+    
+    # pgvector backend 분기
+    backend = os.getenv("FASTTEXT_SIM_BACKEND", "").strip().lower()
+    if backend == "pgvector":
+        return recommend_by_pgvector(q, top_k=top_k)
     
     # 입력 토큰은 corpus에 없어도 임베딩 가능해야 함
     q_vec = embed_token(q)
@@ -200,10 +290,23 @@ def recommend_by_similarity(token: str, top_k: int = 5) -> List[Tuple[str, float
         scored.append((w, sim, url))
 
     scored.sort(key=lambda x: x[1], reverse=True)
-    return scored[: max(1, top_k)]   
+    out = scored[: max(1, top_k)]
+
+    # elapsed 로그 1줄
+    logger.info(
+        "[fasttext][similarity] token=%s top_k=%d corpus=%d elapsed_ms=%d",
+        q, int(top_k), len(_CORPUS_CACHE), int((time.time() - t0) * 1000)
+    )
+
+    return out
 
 
-def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65):
+def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65, replace_on: bool = False):
+    global _PGVECTOR_QUERY_COUNT, _RECOMMEND_CALL_COUNT
+    _RECOMMEND_CALL_COUNT += 1
+    _PGVECTOR_QUERY_COUNT = 0
+
+    t0 = time.time()
     initialize_cache()
 
     safe_tokens = [
@@ -232,21 +335,54 @@ def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65):
             for (w, s, url) in candidates
         ]
 
+        # * 문제사항: top-1을 best로 고정시킴
+        # 의사결정은 여전히 top-1 단일 강제 채택(임계치만 통과하면) 구조
         best = cand_list[0]
-        if best["score"] >= threshold:
+
+        # 관측용: 항상 suggested 제공
+        suggested_word = best["word"]
+        suggested_score = best["score"]
+        suggested_url = best["url"]
+
+        # 치환용(best)은 replace_on=True일 때만 채움
+        if replace_on and suggested_score >= threshold:
             results[t] = {
-                "best": best["word"],
-                "score": best["score"],
-                "url": best["url"],
+                "best": suggested_word,
+                "score": suggested_score,
+                "url": suggested_url,
+                "suggested": {
+                    "word": suggested_word,
+                    "score": suggested_score,
+                    "url": suggested_url,
+                },
                 "candidates": cand_list,
+                "decision": "REPLACED"
             }
+
         else:
             results[t] = {
                 "best": None,
-                "score": best["score"],
+                "score": suggested_score,  # 참고용 스코어(1등 후보)
                 "url": None,
+                "suggested": {
+                    "word": suggested_word,
+                    "score": suggested_score,
+                    "url": suggested_url,
+                },
                 "candidates": cand_list,
+                "decision": "OBSERVE_ONLY"
             }
+
+    logger.warning(
+    "[fasttext][count] tokens_len=%d unique_tokens=%d top_k=%d pgvector_queries=%d recommend_calls=%d elapsed_ms=%d",
+    len(safe_tokens),
+    len(set(safe_tokens)),
+    int(top_k),
+    _PGVECTOR_QUERY_COUNT,
+    _RECOMMEND_CALL_COUNT,
+    int((time.time() - t0) * 1000),
+)
+
 
     return {
         "results": results,
@@ -254,9 +390,8 @@ def recommend(tokens: List[str], top_k: int = 5, threshold: float = 0.65):
             "note": "fasttext (DB cache cosine top_k)",
             "top_k": top_k,
             "threshold": threshold,
-            "corpus_size": len(_CORPUS_CACHE),
+            "replace_on": replace_on,
+            "corpus_size": len(_CORPUS_CACHE)
         },
     }
-
-
 

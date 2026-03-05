@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 import fasttext
 
 _MODEL_BUNDLE: Dict[str, Any] | None = None
+_CORPUS_WARMED: bool = False
 
 
 def get_model_bundle() -> Dict[str, Any]:
@@ -62,4 +63,32 @@ def embed_token(token: str) -> Optional[List[float]]:
         return vec.tolist() if hasattr(vec, "tolist") else list(vec)
     except Exception:
         return None
+    
+
+def warmup_corpus_cache() -> None:
+    """
+    corpus 캐시 warm-up (1회)
+
+    - cold start에서 발생하던 corpus 전량 로딩/벡터 파싱 비용을
+      서버 부팅 시점으로 이동시켜 timeout을 제거한다.
+    - 여러 번 호출돼도 1회만 실행되도록 idempotent 하게 동작한다.
+    """
+    global _CORPUS_WARMED
+    if _CORPUS_WARMED:
+        return
+
+    try:
+        # fastText 모델 선로딩 (요청 경로에서 load_model이 돌지 않게)
+        get_model_bundle()
+        print("[WARMUP] fasttext model loaded")
+
+        # corpus 캐시 warm-up (기존)
+        from model_server.models.fasttext.recommend import _load_corpus_cache
+        _load_corpus_cache()
+        print("[WARMUP] fasttext corpus cache warmed")
+        
+        _CORPUS_WARMED = True
+    except Exception:
+        # 서버 기동을 막지 않도록 예외는 삼키되, 로그는 상위(main.py)에서 남긴다.
+        return
 

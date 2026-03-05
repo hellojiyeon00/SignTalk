@@ -25,6 +25,7 @@ conda-meta/
 # Model Weights / Checkpoints
 # =========================
 assets/
+assets.tar.gz
 *.bin
 *.pt
 *.pth
