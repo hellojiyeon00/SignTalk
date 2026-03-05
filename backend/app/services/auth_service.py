@@ -81,12 +81,12 @@ class AuthService:
         PostgreSQL crypt 함수로 비밀번호 검증
         
         Returns:
-            tuple: (member_id, full_name) 또는 None
+            tuple: (member_id, full_name, member_no) 또는 None
         """
         
         # 로그인 SQL 실행(DB에 저장된 암호화된 비밀번호와 입력된 비밀번호를 crypt 함수로 비교)
         login_sql = text("""
-            SELECT member_id, full_name 
+            SELECT member_id, full_name, member_no
             FROM multicampus_schema.member
             WHERE member_id = :id 
               AND passwd = crypt(:pw, passwd)

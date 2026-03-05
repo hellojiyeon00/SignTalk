@@ -7,6 +7,7 @@ const BASE_URL = "http://localhost:8000";
 const myId = localStorage.getItem("userId");
 const myName = localStorage.getItem("userName");
 const accessToken = localStorage.getItem("accessToken");
+const myNo = localStorage.getItem("userNo");
 
 let currentRoomId = null;    // DB 방 번호
 let currentRoomName = null;  // 소켓 방 이름 (user1_user2)
