@@ -12,7 +12,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 def write_jsonl_log(data: dict):
 
     record = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now().isoformat(),
         **data
     }
 

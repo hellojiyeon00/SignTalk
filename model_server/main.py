@@ -35,11 +35,20 @@ print(
     os.getenv("KOBART_CHECKPOINT"),
 )
 
-from model_server.registry import get_handler  # noqa: E402
+print(
+    "[ENV CHECK][FASTTEXT]",
+    "FASTTEXT_SIM_BACKEND=",
+    os.getenv("FASTTEXT_SIM_BACKEND"),
+    "FASTTEXT_PGVECTOR_COL=",
+    os.getenv("FASTTEXT_PGVECTOR_COL"),
+)
+
+from model_server.registry import get_handler
+from model_server.utils.jsonl_logger import write_jsonl_log
 
 app = FastAPI(title="Model Server", version="2.0.0")
 
-import logging  # noqa: E402
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -95,24 +104,82 @@ async def infer(task: str, req: InferRequest):
 
     logger.info("[infer] start task=%s tokens_len=%s", task, tokens_len)
 
+    # 입력 길이 (확실히 알 수 있는 값만)
+    text_len = -1
     try:
+        if isinstance(req.text, str):
+            text_len = len(req.text)
+    except Exception:
+        text_len = -1
+
+    try:
+        handler_t0 = time.time()
         result = await run_in_threadpool(handler, req.model_dump())
+        handler_elapsed_ms = int((time.time() - handler_t0) * 1000)
+
         if result is None:
             raise RuntimeError(f"handler for task '{task}' returned None")
-        
-        logger.info(
-            "[infer] done task=%s elapsed_ms=%d",
-            task,
-            int((time.time() - t0) * 1000)
-        )
+
+        elapsed_ms = int((time.time() - t0) * 1000)
+
+        logger.info("[infer] done task=%s elapsed_ms=%d", task, elapsed_ms)
+
+        # 성공 로그 (로깅 실패해도 inference는 그대로 진행)
+        try:
+            # result 구조는 handler마다 다를 수 있으므로 "안전 추출"만 한다.
+            request_id = result.get("request_id") if isinstance(result, dict) else None
+            input_text = result.get("input") if isinstance(result, dict) else None
+            gloss = result.get("gloss") if isinstance(result, dict) else None
+
+            meta = result.get("meta") if isinstance(result, dict) else None
+            if not isinstance(meta, dict):
+                meta = {}
+
+            write_jsonl_log(
+                {
+                    "ok": True,
+                    "task": task,
+                    "elapsed_ms": elapsed_ms,
+                    "handler_elapsed_ms": handler_elapsed_ms,
+                    "model_latency_ms": meta.get("latency_ms"),
+                    "tokens_len": tokens_len,
+                    "text_len": text_len,
+                    "request_id": request_id,
+                    "input": input_text,
+                    "gloss": gloss,
+                    "device": meta.get("device"),
+                    "model_dir": meta.get("model_dir"),
+                    "result": result,
+                }
+            )
+        except Exception:
+            logger.exception("[infer][jsonl] write failed (success)")
+
         return {"ok": True, "task": task, "result": result}
-    
+
     except Exception as e:
+        elapsed_ms = int((time.time() - t0) * 1000)
+
         logger.exception(
             "[infer] fail task=%s elapsed_ms=%d",
             task,
-            int((time.time() - t0) * 1000)
+            elapsed_ms
         )
-        raise HTTPException(status_code=500, detail=str(e))
 
-    
+        # 실패 로그
+        try:
+            write_jsonl_log(
+                {
+                    "ok": False,
+                    "task": task,
+                    "elapsed_ms": elapsed_ms,
+                    "tokens_len": tokens_len,
+                    "text_len": text_len,
+                    "error": str(e),
+                    "traceback": traceback.format_exc(),
+                }
+            )
+        except Exception:
+            logger.exception("[infer][jsonl] write failed (fail)")
+
+        raise HTTPException(status_code=500, detail=str(e))
