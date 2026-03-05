@@ -78,9 +78,15 @@ def warmup_corpus_cache() -> None:
         return
 
     try:
+        # fastText 모델 선로딩 (요청 경로에서 load_model이 돌지 않게)
+        get_model_bundle()
+        print("[WARMUP] fasttext model loaded")
+
+        # corpus 캐시 warm-up (기존)
         from model_server.models.fasttext.recommend import _load_corpus_cache
         _load_corpus_cache()
         print("[WARMUP] fasttext corpus cache warmed")
+        
         _CORPUS_WARMED = True
     except Exception:
         # 서버 기동을 막지 않도록 예외는 삼키되, 로그는 상위(main.py)에서 남긴다.
