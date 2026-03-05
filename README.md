@@ -385,12 +385,14 @@ docker compose up -d --build
 docker compose logs -f
 
 # 특정 서비스 로그만 확인
-docker compose logs -f backend
-docker compose logs -f model-app
-docker compose logs -f model-server
+# 프론트엔드 로그 확인
 docker compose logs -f nginx
-docker compose logs -f hadoop
-docker compose logs -f airflow-webserver
+# 백엔드 로그 확인
+docker compose logs -f backend model-app model-server
+# DE 로그 확인
+docker compose logs -f airflow-scheduler hadoop-app kafka
+# DB 로그 확인
+docker compose logs -f redis postgres
 
 # 최근 N줄만 출력 후 실시간 추적
 docker compose logs -f --tail=100 backend
