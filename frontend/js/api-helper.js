@@ -3,8 +3,6 @@
  * JWT 인증 토큰을 자동으로 포함합니다.
  */
 
-const API_BASE_URL = "http://localhost:8000";
-
 // 토큰 갱신 중 플래그 (중복 갱신 방지)
 let isRefreshing = false;
 let refreshPromise = null;
@@ -20,7 +18,7 @@ async function refreshAccessToken() {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        const response = await fetch(`${BASE_URL}/auth/refresh`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
