@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
+import os
 
 
 from app.core.redis_client import get_redis, close_redis
@@ -58,6 +59,15 @@ app.include_router(auth_router, prefix="/auth", tags=["인증"]) # 인증 관련
 app.include_router(chat_router, prefix="/chat", tags=["채팅"]) # 채팅 관련 API는 /chat 경로로 접근
 app.include_router(disaster_router, prefix="/disaster", tags=["재난문자"]) # 재난문자 관련 API는 /disaster 경로로 접근
 app.include_router(location_router, prefix="/location", tags=["위치"]) # 위치 관련 API는 /location 경로로 접근
+
+# 프론트엔드 정적 파일 서빙 (루트 경로)
+# 경로: SignTalk/backend/app/main.py 기준 SignTalk/frontend
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+    logger.info(f"✅ Frontend 연결됨")
+else:
+    logger.warning(f"⚠️ Frontend 경로 확인 불가: {frontend_path}")
 
 # 재난 이미지 정적 파일 서빙
 app.mount("/images", StaticFiles(directory="../image"), name="images")
