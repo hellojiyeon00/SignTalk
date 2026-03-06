@@ -301,7 +301,7 @@ function showToast(message, typeCode = 'EM', typeName = null, disasterType = nul
 
     // 긴급/위급/안전안내 재난은 기존 재난 이미지(disasterType)만 표시
     let imageHtml = '';
-    if ((typeCode === 'EX' || typeCode === 'EM' || typeCode === 'SA') && disasterType) {
+    if ((typeCode === 'EX' || typeCode === 'EM') && disasterType) {
         const imagePath = getDisasterImage(disasterType);
         imageHtml = `<img src="${imagePath}" alt="${disasterType}" style="width:100%; max-width:200px; height:auto; border-radius:8px; margin-bottom:10px; display:block;">`;
     }
