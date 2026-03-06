@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
@@ -63,7 +64,7 @@ app.include_router(disaster_router, prefix="/disaster", tags=["재난문자"]) #
 app.include_router(location_router, prefix="/location", tags=["위치"]) # 위치 관련 API는 /location 경로로 접근
 
 # 재난 이미지 정적 파일 서빙
-app.mount("/images", StaticFiles(directory="../image"), name="images")
+app.mount("/images", StaticFiles(directory="/app/image"), name="images")
 
 # 서버 시작 시 실행할 초기화 작업 (비동기)
 # @app.on_event("startup") 

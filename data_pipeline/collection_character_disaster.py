@@ -13,7 +13,7 @@ from kafka import KafkaProducer
 load_dotenv()
 
 # ── API 설정 ───────────────────────────────────────────────────────
-SERVICE_KEY = os.getenv('DISASTER_SERVICE_KEY', '2A5TIEB9124AU48F')
+SERVICE_KEY = os.getenv('DISASTER_SERVICE_KEY')
 BASE_URL     = 'https://www.safetydata.go.kr/V2/api/DSSP-IF-00247'
 NUM_OF_ROWS  = 10
 
