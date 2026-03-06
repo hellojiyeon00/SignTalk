@@ -2,8 +2,6 @@
  * 인증 관련 기능 (로그인/회원가입)
  */
 
-const API_BASE_URL = "http://localhost:8000";
-
 // 유효성 검사 규칙
 const validators = {
     id: (val) => /^[a-zA-Z0-9]{4,}$/.test(val),
@@ -66,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
             errorMsg.style.display = "none";
 
             try {
-                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                const response = await fetch(`${BASE_URL}/auth/login`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ user_id: userId, password: userPw })
@@ -147,7 +145,7 @@ document.addEventListener("DOMContentLoaded", () => {
             };
 
             try {
-                const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+                const response = await fetch(`${BASE_URL}/auth/signup`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(formData)

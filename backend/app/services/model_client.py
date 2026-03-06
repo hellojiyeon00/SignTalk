@@ -9,6 +9,7 @@ Backend -> Model Server HTTP Client
 from __future__ import annotations
 
 import os
+from dotenv import load_dotenv
 import time
 import logging
 import hashlib
@@ -18,7 +19,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-MODEL_SERVER_BASE_URL = os.getenv("MODEL_SERVER_URL", "http://127.0.0.1:8001")
+# .env 파일 로드
+load_dotenv()
+
+MODEL_SERVER_BASE_URL = os.getenv("MODEL_SERVER_URL")
 MODEL_SERVER_TIMEOUT_SEC = float(os.getenv("MODEL_SERVER_TIMEOUT_SEC", "30"))
 
 
