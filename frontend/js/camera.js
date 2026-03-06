@@ -109,6 +109,8 @@ openBtn.addEventListener("click", async () => {
         return;
     }
 
+    video.style.visibility = "hidden";
+
     isFileMode = false; // 웹캠 모드로 전환
     video.src = "";     // 파일 경로 제거
     video.style.transform = "scaleX(-1)"; // 웹캠은 다시 거울 모드로
@@ -138,15 +140,14 @@ openBtn.addEventListener("click", async () => {
         video.onloadedmetadata = async () => {
             await video.play();
 
-            if (!holistic) initHolistic();
+            if (!holistic) {
+                statusText.textContent = "초기화 중...";
 
-            // 🔥 워밍업 실행
-            try {
+                initHolistic();
+
                 await warmupHolistic();
-            } catch (e) {
-                console.warn("🔥 [MediaPipe] Warmup Failed:", e);
             }
-
+            video.style.visibility = "visible";
             statusText.textContent = "시작 버튼을 눌러주세요.";
             statusText.classList.add("active");
             startBtn.disabled = false;
@@ -249,6 +250,7 @@ function closeCamera() {
     video.style.display = "block"; // 다음 오픈을 위해 복구
     cameraControls.classList.remove("hidden"); // 제어 버튼 복구
     translationResult.classList.add("hidden"); // 결과창 초기화
+    statusText.classList.remove("active");
 
     modal.style.display = "none";
     overlay.style.display = "none";
@@ -345,12 +347,6 @@ videoFileInput.addEventListener("change", async () => {
         video.pause();  // 자동 재생 방지, 시작 버튼으로 제어
 
         if (!holistic) initHolistic();
-
-        try {
-            await warmupHolistic();
-        } catch (e) {
-            console.warn("🔥 [MediaPipe] Warmup Failed:", e);
-        }
 
         statusText.textContent = `📁 ${file.name} | 시작 버튼을 눌러주세요.`;
         statusText.classList.add("active");
