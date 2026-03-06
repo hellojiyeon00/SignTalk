@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
 import os
+from dotenv import load_dotenv
 
 
 from app.core.redis_client import get_redis, close_redis
@@ -22,6 +23,9 @@ from app.services.disaster_service import DisasterService
 
 logger = logging.getLogger("backend-server")
 logging.basicConfig(level=logging.INFO)
+
+# .env 파일 로드
+load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,7 +77,7 @@ else:
     logger.warning(f"⚠️ Frontend 경로 확인 불가: {frontend_path}")
 
 # 재난 이미지 정적 파일 서빙
-app.mount("/images", StaticFiles(directory="../image"), name="images")
+app.mount("/images", StaticFiles(directory=f"{os.getenv('IMAGE')}"), name="images")
 
 # 서버 시작 시 실행할 초기화 작업 (비동기)
 # @app.on_event("startup") 
