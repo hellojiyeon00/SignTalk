@@ -255,7 +255,8 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "user_id": user[0],
-        "user_name": user[1]
+        "user_name": user[1],
+        "user_no": user[2]
     }
 
 

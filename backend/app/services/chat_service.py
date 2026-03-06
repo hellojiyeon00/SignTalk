@@ -193,18 +193,28 @@ class ChatService:
         urls, miss = ChatService.gloss_to_urls(gloss_clean)
         logger.info("[TIMING] url_map_ms=%d", int((time.time() - t_map) * 1000))
 
-        # Step A: miss 토큰이 있을 때만 fastText 호출 (실패해도 절대 전체 흐름 실패시키지 않음)
+                # Step A: miss 토큰이 있을 때만 fastText 호출 (실패해도 절대 전체 흐름 실패시키지 않음)
         if miss:
+            # 정책(관측 모드)
+            FT_TOP_K = 10
+            FT_THRESHOLD = 0.65
+            REPLACE_ON = False
+
             logger.info("[FASTTEXT] miss_tokens=%s", miss)
             trace_id = f"ft-{len(miss)}"
             try:
                 t_ft = time.time()
-                ft_payload = {"tokens": miss}
+                ft_payload = {
+                    "tokens": miss,
+                    "top_k": FT_TOP_K,
+                    "threshold": FT_THRESHOLD,
+                    "replace_on": REPLACE_ON,
+                }
                 logger.info("[FASTTEXT] send_payload=%s", ft_payload)
 
                 fast_res = fasttext_client.infer_payload_sync("fasttext", ft_payload)
-                
-                logger.info("[FASTTEXT][%s] resp=%s", trace_id, str(fast_res)[:800])  # ✅ 추가 (INFO)
+
+                logger.info("[FASTTEXT][%s] resp=%s", trace_id, str(fast_res)[:800])
                 logger.info("[TIMING] fasttext_ms=%d", int((time.time() - t_ft) * 1000))
                 logger.debug(
                     "[FASTTEXT][%s] miss_cnt=%d resp_preview=%r",
@@ -212,55 +222,95 @@ class ChatService:
                     len(miss),
                     str(fast_res)[:400],
                 )
+
                 # =========================
                 # Step B: fastText best 적용 + 2차 URL 재매핑
                 # =========================
-                threshold = 0.65
+                threshold = FT_THRESHOLD
                 ft_results = {}
 
                 if isinstance(fast_res, dict):
                     ft_result = fast_res.get("result") if isinstance(fast_res.get("result"), dict) else {}
                     ft_results = ft_result.get("results") if isinstance(ft_result.get("results"), dict) else {}
 
-                    new_gloss, replaced = ChatService._apply_fasttext_best(
-                        gloss_clean=gloss_clean,
-                        miss_tokens=miss,
-                        fast_res=ft_results,
-                        threshold=threshold
-                    )
-                    
-                    if replaced:
-                        before_url_cnt = len(urls)
-                        before_miss_cnt = len(miss)
+                    # ===== 관측 로그(토큰별 top1/top2/gap) =====
+                    for tok, info in (ft_results or {}).items():
+                        if not isinstance(info, dict):
+                            continue
 
-                        logger.info("[FASTTEXT][%s] replaced=%s", trace_id, replaced)
+                        cands = info.get("candidates") if isinstance(info.get("candidates"), list) else []
+                        top1 = cands[0] if len(cands) >= 1 and isinstance(cands[0], dict) else None
+                        top2 = cands[1] if len(cands) >= 2 and isinstance(cands[1], dict) else None
 
-                        # 2차 매핑
-                        urls2, miss2 = ChatService.gloss_to_urls(new_gloss)
+                        w1 = (top1 or {}).get("word")
+                        w2 = (top2 or {}).get("word")
+
+                        try:
+                            s1 = float((top1 or {}).get("score")) if top1 else None
+                        except Exception:
+                            s1 = None
+                        try:
+                            s2 = float((top2 or {}).get("score")) if top2 else None
+                        except Exception:
+                            s2 = None
+
+                        gap = (s1 - s2) if (s1 is not None and s2 is not None) else None
 
                         logger.info(
-                            "[FASTTEXT][%s] remap url_cnt %d->%d miss_cnt %d->%d",
+                            "[RECO_OBS][%s] token=%s top1=%s(%.4f) top2=%s(%s) gap=%s thr=%.2f replace_on=%s",
                             trace_id,
-                            before_url_cnt,
-                            len(urls2),
-                            before_miss_cnt,
-                            len(miss2),
+                            tok,
+                            w1,
+                            s1 if s1 is not None else -1.0,
+                            w2,
+                            f"{s2:.4f}" if s2 is not None else "NA",
+                            f"{gap:.4f}" if gap is not None else "NA",
+                            FT_THRESHOLD,
+                            REPLACE_ON,
                         )
 
-                        # 최종 반영
-                        gloss_clean = new_gloss
-                        urls = urls2
-                        miss = miss2
+                    # ===== replace_on 정책에 따라 Step B 실행 여부 결정 =====
+                    if not REPLACE_ON:
+                        logger.info("[FASTTEXT][%s] replace_on=false -> skip replace/remap", trace_id)
                     else:
-                        logger.info("[FASTTEXT][%s] replaced=none", trace_id)
+                        new_gloss, replaced = ChatService._apply_fasttext_best(
+                            gloss_clean=gloss_clean,
+                            miss_tokens=miss,
+                            fast_res=ft_results,
+                            threshold=threshold,
+                        )
+
+                        if replaced:
+                            before_url_cnt = len(urls)
+                            before_miss_cnt = len(miss)
+
+                            logger.info("[FASTTEXT][%s] replaced=%s", trace_id, replaced)
+
+                            # 2차 매핑
+                            urls2, miss2 = ChatService.gloss_to_urls(new_gloss)
+
+                            logger.info(
+                                "[FASTTEXT][%s] remap url_cnt %d->%d miss_cnt %d->%d",
+                                trace_id,
+                                before_url_cnt,
+                                len(urls2),
+                                before_miss_cnt,
+                                len(miss2),
+                            )
+
+                            # 최종 반영
+                            gloss_clean = new_gloss
+                            urls = urls2
+                            miss = miss2
+                        else:
+                            logger.info("[FASTTEXT][%s] replaced=none", trace_id)
                 else:
                     logger.info("[FASTTEXT][%s] skip(non-dict response)", trace_id)
-
 
             except Exception as e:
                 # Step A에서는 fastText 실패를 무조건 삼키고 진행 (스택트레이스는 남기지 않음)
                 logger.warning("[FASTTEXT][%s] call failed (Step A): %s", trace_id, e)
-                fast_res = {"ok": False, "task": "fasttext", "error": "timeout", "result": None}
+
         else:
             logger.debug("[FASTTEXT] skip (no miss tokens)")
 

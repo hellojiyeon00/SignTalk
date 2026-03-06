@@ -28,6 +28,9 @@ async def lifespan(app: FastAPI):
     try:
         await redis.ping()
         logger.info("✅ Redis 연결됨")
+        #
+        import app.services.disaster_service as ds
+        ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
     except Exception as e:
         logger.error(f"❌ Redis 연결 실패: {e}")
         raise
@@ -38,8 +41,49 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # ── 종료 ──────────────────────────────────────────────────────
-    logger.info("🛑 서버 종료 중...")
+    # ===== 종료 시 =====
+    await close_redis()
+    print("✅ Redis 연결 종료")
+
+# FastAPI 앱 생성
+app = FastAPI(title="Chat API", version="1.0.0", lifespan=lifespan)
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # 모든 도메인 허용
+    allow_methods=["*"], # 모든 HTTP 메서드(POST, GET 등) 허용
+    allow_headers=["*"], # 모든 HTTP 헤더(Authorization, Content-Type 등) 허용
+)
+
+# API 라우터 등록
+app.include_router(auth_router, prefix="/auth", tags=["인증"]) # 인증 관련 API는 /auth 경로로 접근
+app.include_router(chat_router, prefix="/chat", tags=["채팅"]) # 채팅 관련 API는 /chat 경로로 접근
+app.include_router(disaster_router, prefix="/disaster", tags=["재난문자"]) # 재난문자 관련 API는 /disaster 경로로 접근
+app.include_router(location_router, prefix="/location", tags=["위치"]) # 위치 관련 API는 /location 경로로 접근
+
+# 재난 이미지 정적 파일 서빙
+app.mount("/images", StaticFiles(directory="../image"), name="images")
+
+# 서버 시작 시 실행할 초기화 작업 (비동기)
+# @app.on_event("startup") 
+# async def startup_event():
+#     # SSE 재난문자 리스너를 백그라운드에서 가동
+#     from app.services.disaster_service import kafka_listener_task
+#     import app.services.disaster_service as ds
+    # ds.kafka_listener_task = asyncio.create_task(DisasterService.start_disaster_listener())
+
+
+
+# 서버 종료 시 실행할 정리 작업 (비동기)
+@app.on_event("shutdown")
+async def shutdown_event():
+    """서버 종료 시 모든 연결과 리소스를 정리합니다."""
+    import logging
+    logger = logging.getLogger("main")
+    logger.info("🛑 서버 종료 시작...")
+    
+    # Kafka 리스너 및 SSE 연결 정리
     await DisasterService.stop_disaster_listener()
     await close_redis()
     logger.info("✅ 서버 종료 완료")

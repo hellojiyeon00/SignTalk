@@ -88,6 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     localStorage.setItem("refreshToken", data.refresh_token);
                     localStorage.setItem("userId", userId);
                     localStorage.setItem("userName", data.user_name || userId);
+                    localStorage.setItem("userNo", data.user_no)
                     window.location.href = "index.html";
                 } else {
                     const errData = await response.json();
