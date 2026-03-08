@@ -21,7 +21,7 @@ def _send_mail_sync(to_email: str, code: str) -> None:
     """Gmail SMTP로 인증 메일 발송 (동기, 스레드풀용)"""
     msg = EmailMessage()
     msg["Subject"] = f"[SignTalk] Verification Code: {code}"
-    msg["From"] = settings.SMTP_USER
+    msg["From"] = f"SignTalk <{settings.SMTP_USER}>"
     msg["To"] = to_email
 
     # 텍스트 본문 (ASCII only — SMTP 호환)
@@ -31,7 +31,7 @@ def _send_mail_sync(to_email: str, code: str) -> None:
     html_body = f"""<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px">
 <h2 style="color:#4A90D9">SignTalk 이메일 인증</h2>
 <p>아래 인증 코드를 회원가입 화면에 입력해주세요.</p>
-<div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;
+<div style="font-size:36px;font-weight:bold;text-align:center;
 padding:24px;background:#f0f4ff;border-radius:8px;color:#1a3a6e;margin:24px 0">{code}</div>
 <p style="color:#888;font-size:13px">이 코드는 5분간 유효합니다.<br>본인이 요청하지 않았다면 무시하세요.</p>
 </div>"""

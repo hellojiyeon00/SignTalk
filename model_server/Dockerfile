@@ -7,6 +7,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 1) CPU 전용 PyTorch (CUDA 패키지 대체)
@@ -23,9 +24,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 3) 소스 복사 (model_server 패키지만)
 COPY model_server ./model_server
 
+# 4) 시작 스크립트 복사 및 실행 권한 부여
+RUN chmod +x /app/model_server/start.sh
+
 # 모델 파일은 docker-compose 볼륨으로 주입
 # - ./model_server/assets:/app/assets:ro
 #   ├── kobart/final_model_checkpoint-17800/
 #   └── fasttext/cc.ko.300.bin
 
-CMD ["uvicorn", "model_server.main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "1"]
+CMD ["/app/model_server/start.sh"]
