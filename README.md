@@ -119,7 +119,7 @@
 ```
 SignLanguageTalk/
 │
-├── backend/ (FastAPI)
+├── Backend/ (FastAPI)
 │   ├── app/
 │   │   ├── api/          # API 엔드포인트
 │   │   ├── core/         # 설정 및 보안
@@ -127,7 +127,7 @@ SignLanguageTalk/
 │   │   └── services/     # 핵심 비즈니스 로직 (AI 변환 등)
 │   └── main.py
 │
-├── frontend/ (HTML/JS)
+├── Frontend/ (HTML/JS)
 │   ├── assets/           # CSS, Images
 │   ├── js/               # Frontend logic
 │   ├── chat.html
