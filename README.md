@@ -208,6 +208,24 @@ cd SignTalk
 
 ---
 
+### ⚡ 빠른 시작 (STEP 2~5 자동화)
+
+> **처음 실행하는 경우 아래 명령어 하나로 STEP 2~5를 자동으로 처리합니다.**  
+> `.env` 설정 → SSL 인증서 생성 → 이미지 빌드 → 전체 서비스 기동
+
+```bash
+bash setup.sh
+```
+
+> - `.env`가 없으면 `.env.example`을 복사하고 스크립트가 중단됩니다.  
+>   `.env`를 열어 API 키를 입력한 뒤 다시 실행하세요.
+> - SSL 인증서(`certs/`)는 현재 머신의 IP를 자동 감지해 생성됩니다.  
+>   브라우저에서 **"인증서 신뢰 불가" 경고**가 표시되면 "고급 → 계속 진행"을 클릭하세요.
+
+아래 STEP 2~5는 수동으로 진행하고 싶을 때 참고하세요.
+
+---
+
 ### STEP 2 — 환경변수 및 모델 가중치 설정
 
 #### .env 파일 설정
@@ -227,6 +245,22 @@ cp .env.example .env
 | `LLM_API_KEY` (Gemini) | [Google AI Studio](https://aistudio.google.com) |
 
 > **재난문자 API 주의**: 발급 후 서비스 페이지에서 **서버 IP를 등록**해야 합니다.
+
+#### SSL 인증서 생성
+
+`certs/`는 `.gitignore`에 등록되어 git에 포함되지 않습니다.  
+클론 후 아래 명령으로 사설 인증서를 생성하세요.
+
+```bash
+mkdir -p certs
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout certs/privkey.pem \
+  -out certs/fullchain.pem \
+  -subj "/C=KR/ST=Seoul/L=Seoul/O=SignTalk/CN=$(hostname -I | awk '{print $1}')" \
+  -addext "subjectAltName=IP:$(hostname -I | awk '{print $1}'),IP:127.0.0.1,DNS:localhost"
+```
+
+> `setup.sh`을 사용하면 이 과정이 자동으로 처리됩니다.
 
 #### 모델 가중치 파일 배치
 
@@ -327,7 +361,8 @@ docker compose up -d airflow-webserver airflow-scheduler
 
 | 서비스 | 포트 | 비고 |
 |---|---|---|
-| Frontend (nginx) | 80 | 메인 진입점 |
+| Frontend (nginx) | **443** | 메인 진입점 (HTTPS) |
+| Frontend (nginx) | 80 | HTTP → HTTPS 자동 리다이렉트 |
 | Backend (FastAPI) | 8000 | REST API |
 | Model App (LSTM) | 8001 | 수어 인식 모델 |
 | Model Server (KoBART + FastText) | 8002 | 텍스트 변환 모델 |
@@ -372,7 +407,10 @@ docker compose down -v
 ### 전체 서비스 시작
 
 ```bash
-# 컨테이너 시작
+# 최초 실행 (인증서 생성 + 빌드 + 기동 자동화)
+bash setup.sh
+
+# 이미 설정된 이후 재시작
 docker compose up -d --build
 ```
 

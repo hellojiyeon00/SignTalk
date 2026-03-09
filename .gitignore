@@ -267,4 +267,9 @@ Thumbs.db
 *.temp
 conda-meta/
 
+# =========================
+# SSL/TLS Certificates
+# =========================
+certs/
+
 path/

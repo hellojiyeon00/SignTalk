@@ -282,10 +282,12 @@ services:
     container_name: signtalk-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
       - ./images:/usr/share/nginx/images:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
     networks:
       - signtalk-net
     depends_on:
