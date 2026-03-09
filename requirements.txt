@@ -71,7 +71,7 @@ websockets==15.0.1
 wsproto==1.2.0
 
 # =========================
-# Model Server additions (Python 3.9 compatible)
+# Text2Sign (model_server) additions (Python 3.9 compatible)
 # =========================
 fasttext==0.9.3
 transformers==4.46.3
@@ -84,6 +84,14 @@ regex==2026.1.15
 filelock==3.19.1
 fsspec==2025.10.0
 pillow==11.3.0
+# KoBART 평가 지표를 위해 설치
+evaluate
+rouge-score
+nltk
+sacrebleu
+matplotlib==3.9.4
+# FastText 평가 지표를 위해 설치
+websocket-client==1.9.0
 
 # =========================
 # PyTorch CUDA wheels (IMPORTANT)

@@ -1,10 +1,11 @@
+import os
 import json
 from datetime import datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]  # Text2Sign
 LOG_DIR = BASE_DIR / "logs"
-LOG_FILE = LOG_DIR / "model_infer.jsonl"
+LOG_FILE = LOG_DIR / os.getenv("MODEL_INFER_LOG", "model_infer.jsonl")
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
