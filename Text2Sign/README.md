@@ -323,7 +323,7 @@ http://56.155.47.51:8953/docs
 ### 실행
 
 ```
-cd backend
+cd Backend
 uvicorn app.main:app --host 0.0.0.0 --port 8951
 ```
 
