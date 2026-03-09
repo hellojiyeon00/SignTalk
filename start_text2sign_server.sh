@@ -2,12 +2,12 @@
 set -euo pipefail
 
 HOST="0.0.0.0"
-PORT="8001"
+PORT="8953"
 BASE_URL="http://127.0.0.1:${PORT}"
 
 echo "[start] Starting Model Server on ${HOST}:${PORT} ..."
 
-uvicorn model_server.main:app --host "${HOST}" --port "${PORT}" &
+uvicorn Text2Sign.main:app --host "${HOST}" --port "${PORT}" &
 PID=$!
 
 cleanup() {

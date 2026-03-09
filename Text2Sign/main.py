@@ -43,8 +43,8 @@ print(
     os.getenv("FASTTEXT_PGVECTOR_COL"),
 )
 
-from model_server.registry import get_handler
-from model_server.utils.jsonl_logger import write_jsonl_log
+from Text2Sign.registry import get_handler
+from Text2Sign.utils.jsonl_logger import write_jsonl_log
 
 app = FastAPI(title="Model Server", version="2.0.0")
 

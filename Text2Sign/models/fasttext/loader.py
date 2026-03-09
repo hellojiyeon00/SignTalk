@@ -83,7 +83,7 @@ def warmup_corpus_cache() -> None:
         print("[WARMUP] fasttext model loaded")
 
         # corpus 캐시 warm-up (기존)
-        from model_server.models.fasttext.recommend import _load_corpus_cache
+        from Text2Sign.models.fasttext.recommend import _load_corpus_cache
         _load_corpus_cache()
         print("[WARMUP] fasttext corpus cache warmed")
         
