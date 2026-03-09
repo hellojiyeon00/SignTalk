@@ -13,14 +13,14 @@ FastAPI 기반 단일 엔트리 구조이며 Backend Service Layer와 완전히 
 - KoBART Lazy Loading
 - FastText Startup Warmup
 - FastText + pgvector Retrieval Pipeline
-- Backend ↔ Model Server 완전 분리
+- Backend ↔ Text2Sign (model_server) 완전 분리
 
 ---
 
 # 📁 Directory Structure
 
 ```
-model_server/
+Text2Sign/
 │
 ├── main.py
 │   FastAPI 엔트리 포인트
@@ -142,33 +142,19 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 
 Model Server는 **프로젝트 루트 .env 파일을 사용합니다.**
 
-예시
-
-```
-DATABASE_URL=postgresql://user:password@host:5432/db
-
-FASTTEXT_MODEL_PATH=/home/lab06/SignTalk/model_server/assets/fasttext/cc.ko.300.bin
-
-KOBART_CHECKPOINT=/home/lab06/SignTalk/model_server/assets/kobart/final_model_checkpoint-17800
-
-DEVICE=auto
-MAX_NEW_TOKENS=64
-NUM_BEAMS=4
-```
-
 ⚠ `.env`와 `assets/`는 Git에 업로드하지 않습니다.
 
 ---
 
-# 🚀 Model Server 실행
+# 🚀 Text2Sign (Model Server) 실행
 
 ⚠ 실행 스크립트는 **프로젝트 루트에 위치합니다**
 
 권장 실행 (warmup 포함)
 
 ```
-chmod +x start_model_server_8001.sh
-./start_model_server_8001.sh
+chmod +x start_text2sign_server.sh
+./start_text2sign_server.sh
 ```
 
 해당 스크립트는
@@ -182,9 +168,9 @@ chmod +x start_model_server_8001.sh
 수동 실행 (warmup 없이)
 
 ```
-uvicorn model_server.main:app \
+uvicorn Text2Sign.main:app \
     --host 0.0.0.0 \
-    --port 8001
+    --port 8953
 ```
 
 ⚠ 운영 환경에서 `--reload` 사용 금지
@@ -272,17 +258,14 @@ KoBART 추론: 약 350~500ms
 # 🔎 FastText Retrieval Pipeline
 
 ```
-Input Text
-    ↓
-Tokenize
-    ↓
-FastText Word Vector
-    ↓
-pgvector Similarity Search
-    ↓
-Top-K Corpus Match
-    ↓
-Word → Sign Video URL Mapping
+# 🔎 FastText Retrieval Pipeline
+
+1. Input Text
+2. Tokenize
+3. FastText Word Vector 생성
+4. pgvector Similarity Search
+5. Top-K Corpus Match
+6. Word → Sign Video URL Mapping
 ```
 
 ---
@@ -313,87 +296,67 @@ Word → Sign Video URL Mapping
 
 # 🔐 Security
 
-- EC2 보안 그룹에서 8001 포트 제한
+- EC2 보안 그룹에서 8953 포트 제한
 - 내부 서비스 전용일 경우 Private IP 바인딩 권장
 - 민감 정보는 `.env`로 관리
 
 ---
 
-# 🧪 SignTalk 로컬 테스트 실행 순서
+# 🚀 SignTalk 서버 실행 및 확인
+
+## 1️⃣ Text2Sign (Model Server)
+
+### 실행
+
+```
+./start_text2sign_server.sh
+```
+
+### 접속 확인
+
+http://56.155.47.51:8953/docs
 
 ---
 
-## 1️⃣ Model Server 실행
+## 2️⃣ Backend Server
 
-역할
-
-- KoBART 번역 (텍스트 → gloss 생성)
-- FastText 유사도 검색
-- gloss → 수어 영상 URL 매핑
-
-권장 실행
+### 실행
 
 ```
-chmod +x start_model_server_8001.sh
-./start_model_server_8001.sh
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8951
 ```
 
-수동 실행
+### 접속 확인
 
-```
-uvicorn model_server.main:app --host 0.0.0.0 --port 8001
-```
+http://56.155.47.51:8951/docs
 
 ---
 
-## 2️⃣ Backend Server 실행
+# 🔗 전체 서버 구조
 
-역할
-
-- Socket.IO 채팅 처리
-- Model Server 호출
-- Redis / Kafka / SSE 처리
-- Frontend와 실시간 통신
-
-```
-uvicorn app.main:app --host 0.0.0.0 --port 8010
-```
+| Component | Address                  |
+| --------- | ------------------------ |
+| Text2Sign | http://56.155.47.51:8953 |
+| Backend   | http://56.155.47.51:8951 |
 
 ---
 
-## 3️⃣ Frontend 실행
+# ⚡ 서버 실행 순서 (권장)
 
-```
-cd frontend
-python -m http.server 5505
-```
-
-⚠ VSCode Live Server 사용 금지
-
----
-
-## 4️⃣ 브라우저 접속
-
-```
-http://127.0.0.1:5505/index.html
-```
-
-또는
-
-```
-http://127.0.0.1:5505/chat.html
-```
+1. **Text2Sign (Model Server) 실행**
+2. **Backend Server 실행**
 
 ---
 
 ## 5️⃣ 채팅 동작 흐름
 
 ```
-Frontend (5505)
+Frontend
    ↓ socket emit
-Backend (8010)
+Backend (8951)
    ↓ HTTP 요청 (/infer/*)
-Model Server (8001)
+Text2Sign (8953)
    ↓ 결과 반환
 Backend
    ↓ socket broadcast
@@ -406,7 +369,7 @@ Frontend
 
 # 🏁 Summary
 
-본 Model Server는
+본 Text2Sign은
 
 - FastAPI 기반 Inference Server
 - 멀티 모델 단일 엔트리 구조
