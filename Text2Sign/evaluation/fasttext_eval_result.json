@@ -1,0 +1,136 @@
+{
+  "total_tokens": 55,
+  "db_word_count": 6368,
+  "basic_stats": {
+    "avg_candidate_count": 10.0,
+    "avg_top1_score": 0.5016,
+    "median_top1_score": 0.4895,
+    "min_top1_score": 0.271,
+    "max_top1_score": 0.7576,
+    "std_top1_score": 0.1141
+  },
+  "threshold_hit_rate": {
+    "0.5": 0.4182,
+    "0.55": 0.3091,
+    "0.6": 0.2182,
+    "0.65": 0.1818
+  },
+  "decision_distribution": {
+    "OBSERVE_ONLY": 55
+  },
+  "vocab_coverage": {
+    "raw_exact_match_count": 0,
+    "raw_exact_match_rate": 0.0,
+    "normalized_exact_match_count": 2,
+    "normalized_exact_match_rate": 0.0364,
+    "oov_count_raw": 55,
+    "oov_rate_raw": 1.0,
+    "oov_count_normalized": 53,
+    "oov_rate_normalized": 0.9636
+  },
+  "exact_match_eval_raw": {
+    "subset_size": 0,
+    "top1_accuracy": 0.0,
+    "recall_at_10": 0.0,
+    "mrr_at_10": 0.0
+  },
+  "exact_match_eval_normalized": {
+    "subset_size": 2,
+    "top1_accuracy": 0.0,
+    "recall_at_10": 0.0,
+    "mrr_at_10": 0.0
+  },
+  "latency_ms": {
+    "avg": 862.9273,
+    "p50": 41.0,
+    "p95": 62.3,
+    "p99": 20929.8,
+    "min": 20.0,
+    "max": 45381.0
+  },
+  "diversity": {
+    "unique_top1_words": 34,
+    "most_common_top1_words": [
+      [
+        "살다",
+        6
+      ],
+      [
+        "일월 일일",
+        3
+      ],
+      [
+        "(열매)밤",
+        3
+      ],
+      [
+        "벌금",
+        3
+      ],
+      [
+        "군교",
+        3
+      ],
+      [
+        "넘기다",
+        2
+      ],
+      [
+        "저녁",
+        2
+      ],
+      [
+        "밤새다",
+        2
+      ],
+      [
+        "사진",
+        2
+      ],
+      [
+        "기초 생활 보호 대상자",
+        2
+      ],
+      [
+        "단란하다",
+        2
+      ],
+      [
+        "가능",
+        2
+      ],
+      [
+        "날쌔다",
+        2
+      ],
+      [
+        "시험",
+        1
+      ],
+      [
+        "국립",
+        1
+      ],
+      [
+        "신문",
+        1
+      ],
+      [
+        "위성",
+        1
+      ],
+      [
+        "어쩔 수 없다",
+        1
+      ],
+      [
+        "발버둥질",
+        1
+      ],
+      [
+        "배신(당하다)",
+        1
+      ]
+    ]
+  }
+}
