@@ -13,7 +13,7 @@ FastAPI 기반 단일 엔트리 구조이며 Backend Service Layer와 완전히 
 - KoBART Lazy Loading
 - FastText Startup Warmup
 - FastText + pgvector Retrieval Pipeline
-- Backend ↔ Text2Sign (model_server) 완전 분리
+- Backend Service Layer와 Model Server(Text2Sign) 완전 분리
 
 ---
 
@@ -148,30 +148,20 @@ Model Server는 **프로젝트 루트 .env 파일을 사용합니다.**
 
 # 🚀 Text2Sign (Model Server) 실행
 
-⚠ 실행 스크립트는 **프로젝트 루트에 위치합니다**
+Text2Sign 서버는 **uvicorn 기반으로 직접 실행**합니다.
 
-권장 실행 (warmup 포함)
+Startup 단계에서
 
-```
-chmod +x start_text2sign_server.sh
-./start_text2sign_server.sh
-```
+- KoBART warmup
+- FastText bundle preload
+- corpus cache warmup
 
-해당 스크립트는
+이 자동 수행되어 **Cold Start 지연을 방지합니다.**
 
-- FastText 모델 preload
-- KoBART 모델 warmup
-- FastText corpus cache warmup
+### 실행
 
-을 자동 수행하여 **Cold Start 지연을 방지합니다.**
-
-수동 실행 (warmup 없이)
-
-```
-uvicorn Text2Sign.main:app \
-    --host 0.0.0.0 \
-    --port 8953
-```
+cd Text2Sign
+uvicorn main:app --host 0.0.0.0 --port 8953
 
 ⚠ 운영 환경에서 `--reload` 사용 금지
 
@@ -242,8 +232,7 @@ KoBART
 FastText
 
 - Server Startup Warmup
-- 서버 시작 시 모델 preload
-- corpus cache warmup 수행
+- FastText bundle preload 및 corpus cache warmup
 
 Cold Start
 
@@ -309,12 +298,17 @@ KoBART 추론: 약 350~500ms
 ### 실행
 
 ```
-./start_text2sign_server.sh
+cd Text2Sign
+uvicorn main:app --host 0.0.0.0 --port 8953
 ```
 
 ### 접속 확인
 
-http://56.155.47.51:8953/docs
+http://localhost:8953/docs
+
+또는
+
+http://<SERVER_IP>:8953/docs
 
 ---
 
@@ -329,16 +323,22 @@ uvicorn app.main:app --host 0.0.0.0 --port 8951
 
 ### 접속 확인
 
-http://56.155.47.51:8951/docs
+http://localhost:8951/docs
+
+또는
+
+http://<SERVER_IP>:8951/docs
 
 ---
 
 # 🔗 전체 서버 구조
 
-| Component | Address                  |
-| --------- | ------------------------ |
-| Text2Sign | http://56.155.47.51:8953 |
-| Backend   | http://56.155.47.51:8951 |
+| Component | Default Address |
+|-----------|----------------|
+| Text2Sign | http://localhost:8953 |
+| Backend | http://localhost:8951 |
+
+외부 서버 환경에서는 `<SERVER_IP>`를 사용합니다.
 
 ---
 
@@ -374,7 +374,7 @@ Frontend
 - FastAPI 기반 Inference Server
 - 멀티 모델 단일 엔트리 구조
 - KoBART Lazy Loading
-- FastText Startup Warmup
+- Server Startup Warmup (KoBART + FastText)
 - FastText + pgvector Retrieval Pipeline
 - JSONL 기반 추론 로그 기록
 - Python 3.9 + CUDA 환경 고정
