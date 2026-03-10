@@ -5,7 +5,7 @@ import logging
 
 from model_app.core.redis_client import get_redis, close_redis
 from model_app.core.model_loader import ModelLoader
-from model_app.api.models import router as model_router
+from model_app.api.model import router as model_router
 
 logger = logging.getLogger("model-server")
 logging.basicConfig(level=logging.INFO)
@@ -59,4 +59,4 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Model API", version="1.0", lifespan=lifespan)
 
 # API 라우터 등록
-app.include_router(model_router, prefix="/models", tags=["Sign2Text"])
+app.include_router(model_router, prefix="/model", tags=["Sign2Text"])

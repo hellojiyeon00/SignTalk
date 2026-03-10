@@ -453,24 +453,6 @@ async def handle_send_message(sid, data):
         except Exception as e:
             logger.exception("❌ [소켓 에러] 메시지 처리 실패")
 
-# 랜드마크 수신
-@sio.on("send_landmarks")
-async def handle_send_landmarks(sid, data):
-    # 서비스 호출 (AI 모델 예측 및 단어 추출)
-    msg = await call_sign2text(data)
-
-    if msg is not None:
-        room_name = data.get("room")
-
-        payload = {
-            "room": room_name,
-            "room_id": data.get("room_id"),
-            "username": data.get("username"),
-            "message": msg
-        }
-
-        await sio.emit("translation_result", payload, room=room_name)
-
 @sio.on("send_translation")
 async def handle_send_translation(sid, data):
     room_id = data.get("room_id")

@@ -1,54 +1,13 @@
 """모델 로더 - 서버 시작 시 1회 로드"""
 import csv
 import logging
-
-import torch
-import torch.nn as nn
+import os
+import tensorflow as tf
 
 from model_app.core.config import settings
 
 logger = logging.getLogger("model-loader")
 logging.basicConfig(level=logging.INFO)
-
-# ── 디바이스 설정 ──────────────────────────────────────────────
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# ── GlossLSTM 모델 정의 ──────────
-class GlossLSTM(nn.Module):
-    """Bidirectional LSTM + Attention pooling 분류기"""
-
-    def __init__(self, input_dim, hidden_size, num_layers, num_classes, dropout=0.3):
-        super().__init__()
-        self.input_norm = nn.BatchNorm1d(input_dim)
-        self.lstm = nn.LSTM(
-            input_size=input_dim,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            bidirectional=True,
-            dropout=dropout if num_layers > 1 else 0.0
-        )
-        lstm_out_dim = hidden_size * 2
-        self.attn = nn.Sequential(
-            nn.Linear(lstm_out_dim, 64),
-            nn.Tanh(),
-            nn.Linear(64, 1)
-        )
-        self.classifier = nn.Sequential(
-            nn.Linear(lstm_out_dim, hidden_size),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_size, num_classes)
-        )
-
-    def forward(self, x):
-        batch, seq_len, feat = x.shape
-        x = self.input_norm(x.reshape(-1, feat)).reshape(batch, seq_len, feat)
-        out, _ = self.lstm(x)
-        scores  = self.attn(out).squeeze(-1)
-        weights = torch.softmax(scores, dim=-1)
-        context = (weights.unsqueeze(-1) * out).sum(dim=1)
-        return self.classifier(context)
 
 class ModelLoader:
     """전역 모델 저장소
@@ -62,7 +21,6 @@ class ModelLoader:
     lstm_model = None
 
     # ===== 레이블 =====
-    le_classes = []
     label_list = []
     gloss_dict = {}
 
@@ -80,34 +38,13 @@ class ModelLoader:
         try:
             logger.info(f"📦 [LSTM] 모델 로딩 시작: {settings.LSTM_MODEL_PATH}")
 
-            # ── 체크포인트 로드 ──────────────────────────────────
-            ckpt = torch.load(
-                settings.LSTM_MODEL_PATH,
-                map_location=DEVICE,
-                weights_only=False   # label_encoder_classes(list) 포함 저장본 호환
+            # ── 모델 로드 ──────────────────────────────────
+            cls.lstm_model = tf.keras.models.load_model(
+                settings.LSTM_MODEL_PATH
             )
 
-            # ── 모델 구성 (저장된 하이퍼파라미터 사용) ───────────
-            cls.lstm_model = GlossLSTM(
-                input_dim=ckpt["input_dim"],
-                hidden_size=ckpt["hidden_size"],
-                num_layers=ckpt["num_layers"],
-                num_classes=ckpt["num_classes"],
-                dropout=ckpt["dropout"]
-            ).to(DEVICE)
-
-            cls.lstm_model.load_state_dict(ckpt["model_state"])
-            cls.lstm_model.eval()
-
-            cls.le_classes = list(ckpt["label_encoder_classes"])
             cls._model_status['lstm'] = True
-
             logger.info(f"✅ [LSTM] 모델 로드 완료")
-            logger.info(f"   input_dim   : {ckpt['input_dim']}")
-            logger.info(f"   hidden_size : {ckpt['hidden_size']}")
-            logger.info(f"   num_classes : {ckpt['num_classes']}")
-            logger.info(f"   le_classes  : {len(cls.le_classes)}개 (예: {cls.le_classes[:3]}...)")
-            logger.info(f"   device      : {DEVICE}")
 
         except FileNotFoundError:
             logger.error(f"❌ [LSTM] 모델 파일을 찾을 수 없음: {settings.LSTM_MODEL_PATH}")
@@ -128,11 +65,11 @@ class ModelLoader:
         try:
             logger.info(f"📦 [LSTM] 레이블 로딩 시작: {settings.GLOSS_LABEL_PATH}")
 
-            with open(settings.GLOSS_LABEL_PATH, newline="", encoding="utf-8") as f:
+            with open(settings.GLOSS_LABEL_PATH, newline="", encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     label = row["label"]
-                    gloss = row["gloss"]
+                    gloss = row["title"]
                     cls.label_list.append(label)
                     cls.gloss_dict[label] = gloss
 
@@ -144,7 +81,7 @@ class ModelLoader:
 
     # ===== 전체 초기화 =====
     @classmethod
-    def initialize_all(cls, load_optional: bool = True):
+    def initialize_all(cls):
         """모든 모델 초기화"""
         logger.info("=" * 70)
         logger.info("🔧 모델 로딩 시작...")
@@ -155,7 +92,7 @@ class ModelLoader:
 
         logger.info("📊 모델 로딩 결과:")
         logger.info(f"  - LSTM      : {'✅ 로드됨' if cls._model_status.get('lstm') else '❌ 로드 실패'}")
-        logger.info(f"  - le_classes: {'✅' if cls.le_classes else '❌'} ({len(cls.le_classes)}개)")
+        logger.info(f"  - label_list: {'✅' if cls.label_list else '❌'} ({len(cls.label_list)}개)")
         logger.info(f"  - gloss_dict: {'✅' if cls.gloss_dict else '❌'} ({len(cls.gloss_dict)}개)")
 
         if not cls._model_status.get('lstm'):
