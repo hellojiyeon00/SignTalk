@@ -43,8 +43,8 @@ print(
     os.getenv("FASTTEXT_PGVECTOR_COL"),
 )
 
-from Text2Sign.registry import get_handler
-from Text2Sign.utils.jsonl_logger import write_jsonl_log
+from registry import get_handler
+from utils.jsonl_logger import write_jsonl_log
 
 app = FastAPI(title="Model Server", version="2.0.0")
 
@@ -52,6 +52,54 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+@app.on_event("startup")
+async def startup_warmup():
+    print("[WARMUP] startup begin")
+
+    # KoBART warmup
+    try:
+        kobart_handler = get_handler("kobart")
+        if kobart_handler is not None:
+            await run_in_threadpool(
+                kobart_handler,
+                {
+                    "text": "텍스트",
+                    "payload": {
+                        "top_k": 1,
+                        "max_new_tokens": 8,
+                        "num_beams": 1
+                    },
+                },
+            )
+            print("[WARMUP] KoBART warmed")
+        else:
+            print("[WARMUP] KoBART handelr not found")
+    except Exception as e:
+        print(f"[WARMUP][KoBART] failed: {e}")
+
+    # FastText warmup
+    try:
+        fasttext_handler = get_handler("fasttext")
+        if fasttext_handler is not None:
+            await run_in_threadpool(
+                fasttext_handler,
+                {
+                    "text": None,
+                    "payload": {
+                        "tokens": ["테스트"],
+                        "top_k": 10,
+                        "threshold": 0.65,
+                        "replace_on": False
+                    },
+                },
+            )
+            print("[WARMUP] FastText warmed")
+        else:
+            print("[WARMUP] FastText handler not found")
+    except Exception as e:
+        print(f"[WARMUP][FastText] failed: {e}")
+
+    print("[WARMUP] startup end")
 
 class InferRequest(BaseModel):
     """
