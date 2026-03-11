@@ -71,7 +71,7 @@ app.include_router(sign2text_router, prefix="/sign2text", tags=["수어번역"])
 
 # 프론트엔드 정적 파일 서빙 (루트 경로)
 # 경로: SignTalk/backend/app/main.py 기준 SignTalk/frontend
-frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "Frontend")
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
     logger.info(f"✅ Frontend 연결됨")
