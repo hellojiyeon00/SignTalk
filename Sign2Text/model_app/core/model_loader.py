@@ -24,6 +24,9 @@ class ModelLoader:
     label_list = []
     gloss_dict = {}
 
+    # ===== Mediapipe =====
+    mp_holistic = None
+
     # ===== 상태 =====
     _model_status = {}
 
@@ -79,6 +82,30 @@ class ModelLoader:
             logger.error(f"❌ [LSTM] 레이블 로드 실패: {e}")
             raise
 
+    # ===== 레이블 로드 =====
+    @classmethod
+    def load_mediapipe(cls):
+        """mediapipe 초기화"""
+        if cls.mp_holistic is not None:
+            logger.warning("⚠️ [Mediapipe] Holistic이 이미 로드됨")
+            return
+
+        import mediapipe as mp
+
+        try:
+            logger.info(f"📦 [Mediapipe] Holistic 로딩 시작")
+
+            cls.mp_holistic = mp.solutions.holistic.Holistic(
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            
+            logger.info(f"✅ [Mediapipe] Holistic 로드 완료")
+            
+        except Exception as e:
+            logger.error(f"❌ [Mediapipe] Holistic 로드 실패: {e}")
+            raise
+
     # ===== 전체 초기화 =====
     @classmethod
     def initialize_all(cls):
@@ -89,6 +116,7 @@ class ModelLoader:
 
         cls.load_lstm_model()  # le_classes 도 여기서 로드됨
         cls.load_labels()      # gloss_dict 구성
+        cls.load_mediapipe()
 
         logger.info("📊 모델 로딩 결과:")
         logger.info(f"  - LSTM      : {'✅ 로드됨' if cls._model_status.get('lstm') else '❌ 로드 실패'}")
@@ -115,4 +143,10 @@ class ModelLoader:
             cls.lstm_model = None
             cls._model_status['lstm'] = False
             logger.info("🗑️ [LSTM] 모델 언로드됨")
+
+        if cls.mp_holistic is not None:
+            cls.mp_holistic.close()
+            cls.mp_holistic = None
+            logger.info("🗑️ [Mediapipe] Holistic 종료")
+
         logger.info("✅ 모든 모델 언로드 완료")

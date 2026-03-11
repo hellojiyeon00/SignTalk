@@ -2,6 +2,7 @@ from fastapi import APIRouter, File, UploadFile, Form
 import logging
 
 from model_app.services.lstm_service import transfer_sign2gloss
+from model_app.services.llm_service import transfer_gloss2text
 
 # 로거 설정
 logger = logging.getLogger("model-api")
@@ -23,15 +24,17 @@ async def translate_sign2text(
         video_bytes = await file.read()
         
         # LSTM 서비스 호출 (바이트 데이터를 직접 전달)
-        result_text = await transfer_sign2gloss(video_bytes)
+        gloss_sequence = await transfer_sign2gloss(video_bytes)
         
-        # 테스트용 가짜 응답
-        logger.info(f"🔮 모델 추론 시작: {file.filename} (User: {username})")
-        result_text = "안녕하세요" # 실제 모델 결과값이 들어갈 자리
+        # LLM API 호출
+        text = await transfer_gloss2text(gloss_sequence)
+
+        if text is None:
+            text = gloss_sequence
         
         return {
             "status": "success",
-            "text": result_text,
+            "text": text,
             "info": f"Processed video for {username}"
         }
         

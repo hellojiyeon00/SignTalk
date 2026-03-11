@@ -13,7 +13,6 @@ from fastapi.concurrency import run_in_threadpool
 from jose import jwt, JWTError
 
 from app.core.database import SessionLocal
-from app.services.sign_service import call_sign2text
 from app.core.config import settings
 
 # kobart 모델 서버 코드 추가
