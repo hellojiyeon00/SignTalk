@@ -3,8 +3,6 @@ const openBtn = document.getElementById("signCameraBtn");
 const closeBtn = document.getElementById("closeCameraBtn");
 const modal = document.getElementById("cameraModal");
 const overlay = document.getElementById("cameraOverlay");
-const videoFileInput = document.getElementById("videoFileInput");
-const selectFileBtn = document.getElementById("selectFileBtn");
 const video = document.getElementById("videoInput");
 const videoLoading = document.getElementById("videoLoading");
 const startBtn = document.getElementById("startBtn");
@@ -15,82 +13,11 @@ const translationResult = document.getElementById("translationResult");
 const translationInput = document.getElementById("translationInput");
 
 // ===== 상태 =====
+let mediaRecorder;
+let recordedChunks = [];
 let stream = null;
-let holistic = null;
-let isCapturing = false;
-let frameCount = 0;
-let currentSendPromise = null;
-let isFileMode = false;
-let fileObjectURL = null;
 
-// ===== 인덱스 =====
-const POSE_LANDMARKS_IDX = [11, 12, 13, 14, 15, 16];
-const HAND_LANDMARKS_IDX = Array.from({ length: 21 }, (_, i) => i);
-
-// ===== MediaPipe 초기화 =====
-function initHolistic() {
-    console.log("📷 [MediaPipe] Initialize");
-
-    holistic = new Holistic({
-        locateFile: file =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
-    });
-
-    holistic.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-
-    holistic.onResults(onResults);
-}
-
-// ===== 랜드마크 처리 =====
-function getCoord(landmarks, indices) {
-    if (!landmarks) return new Array(indices.length * 2).fill(0);
-
-    return indices.flatMap(i => {
-        const lm = landmarks[i];
-        return lm ? [lm.x, lm.y] : [0, 0];
-    });
-}
-
-function onResults(results) {
-    if (!isCapturing) return;
-
-    const landmarks = [
-        ...getCoord(results.poseLandmarks, POSE_LANDMARKS_IDX),
-        ...getCoord(results.leftHandLandmarks, HAND_LANDMARKS_IDX),
-        ...getCoord(results.rightHandLandmarks, HAND_LANDMARKS_IDX),
-    ];
-
-    frameCount++;
-    statusText.textContent = `인식 중... (${frameCount} 프레임)`;
-
-    // Socket.IO 전송(랜드마크 전송)
-    socket.emit("send_landmarks", {
-        room: currentRoomName,
-        room_id: currentRoomId,
-        username: myId,
-        message: landmarks,
-        status_stop: false
-    });
-
-    console.log(`📤 [Socket] 전송: ${landmarks}`);
-}
-
-// ===== 워밍업 =====
-async function warmupHolistic() {
-  // video 프레임 준비 여부 확인
-    if (!holistic || !video.videoWidth) return;
-
-  // 초기화 비용 미리 소모(결과 저장 X)
-  for (let i = 0; i < 2; i++) {
-    await holistic.send({ image: video });
-  }
-  console.log("🔥 [MediaPipe] Warmup Complete");
-}
+const mimeType = 'video/webm; codecs=vp8';
 
 function showLoading() {
   videoLoading.classList.remove("hidden");
@@ -109,22 +36,14 @@ openBtn.addEventListener("click", async () => {
         return;
     }
 
-    video.style.visibility = "hidden";
+    // 1. 모달 표시
+    modal.style.display = "block";
+    overlay.style.display = "block";
 
-    isFileMode = false; // 웹캠 모드로 전환
-    video.src = "";     // 파일 경로 제거
-    video.style.transform = "scaleX(-1)"; // 웹캠은 다시 거울 모드로
-
-    if (fileObjectURL) {
-        URL.revokeObjectURL(fileObjectURL);
-        fileObjectURL = null;
-    }
+    video.style.transform = "scaleX(-1)"; // 거울 모드
 
     console.log("📷 [Camera] Open Camera")
     statusText.textContent = "카메라 준비 중...";
-
-    modal.style.display = "block";
-    overlay.style.display = "block";
 
     startBtn.disabled = true;
     stopBtn.disabled = true;
@@ -134,23 +53,12 @@ openBtn.addEventListener("click", async () => {
             video: { width: 480, height: 360 },
             audio: false
         });
-
         video.srcObject = stream;
 
-        video.onloadedmetadata = async () => {
-            await video.play();
-
-            if (!holistic) {
-                statusText.textContent = "초기화 중...";
-
-                initHolistic();
-
-                await warmupHolistic();
-            }
-            video.style.visibility = "visible";
-            statusText.textContent = "시작 버튼을 눌러주세요.";
-            statusText.classList.add("active");
+        video.onloadedmetadata = () => {
             startBtn.disabled = false;
+            statusText.classList.add("active");
+            statusText.textContent = "시작 버튼을 눌러주세요.";
         };
     }
     catch (e) {
@@ -161,121 +69,133 @@ openBtn.addEventListener("click", async () => {
 
 // ===== 시작 =====
 startBtn.addEventListener("click", () => {
-    console.log("📷 [Camera] Start Send Landmarks")
+    if (!stream) return;
+    
+    console.log("📷 [Camera] Start Recording")
 
-    isCapturing = true;
-    frameCount = 0;
+    recordedChunks = []; // 이전 데이터 초기화
 
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    statusText.classList.remove("active");
+    try {
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
 
-    // 파일 모드일 경우 영상 처음부터 재생
-    if (isFileMode) {
-        video.currentTime = 0;
-        video.play();
-
-        // 영상이 끝나면 자동으로 중지 처리
-        video.onended = () => {
-            console.log("📁 [File] 영상 재생 완료 → 자동 중지");
-            stopBtn.click();
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
         };
+
+        mediaRecorder.onstop = uploadVideo;
+
+        mediaRecorder.start(); 
+
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        statusText.classList.remove("active");
+        statusText.textContent = "녹화 중...";
+    } catch (err) {
+        console.error("Recorder Error:", err);
+        alert("녹화를 시작할 수 없습니다.");
     }
-
-    async function loop() {
-        if (!isCapturing) return;
-
-        // 파일 모드에서 영상이 끝난 경우 루프 종료
-        if (isFileMode && video.ended) return;
-
-        // 영상이 일시정지 상태면 다음 프레임까지 대기
-        if (isFileMode && video.paused) {
-            requestAnimationFrame(loop);
-            return;
-        }
-
-        currentSendPromise = holistic.send({ image: video });
-        await currentSendPromise;
-        currentSendPromise = null;
-
-        if (!isCapturing) return;
-
-        requestAnimationFrame(loop);
-    }
-    loop();
 });
 
 
 // ===== 중지 =====
 stopBtn.addEventListener("click", async () => {
-    console.log("📷 [Camera] Stop Send Landmarks")
+    console.log("📷 [Camera] Stop Recording")
 
-    isCapturing = false;
-    if (isFileMode) video.pause(); // 파일 재생 중지
+    // onstop 이벤트(uploadVideo) 발생
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+    }
 
     stopBtn.disabled = true;
     statusText.textContent = "";
+});
 
-    if (currentSendPromise) {
-        await currentSendPromise;
-    }
+// ===== 서버 전송 함수 추가 =====
+async function uploadVideo() {
+    if (recordedChunks.length === 0) return;
+
+    console.log("📤 [Camera] Uploading Video");
     
+    // 로딩 UI 표시
     showLoading();
 
-    // Socket.IO 전송(랜드마크 전송 중단)
-    socket.emit("send_landmarks", {
-        room: currentRoomName,
-        room_id: currentRoomId,
-        username: myId,
-        message: null,
-        status_stop: true
-    });
-});
+    const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+    const formData = new FormData();
+    
+    // 채팅방 정보
+    const fileName = `${currentRoomId}_${myNo}_video.webm`
+    formData.append('file', videoBlob, fileName);
+    formData.append('room', currentRoomName);
+    formData.append('room_id', currentRoomId);
+    formData.append('username', myId);
+    formData.append('userno', myNo);
+
+    try {
+        const response = await fetch(`${BASE_URL}/sign2text/save_video`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) throw new Error("서버 응답 오류");
+
+        const result = await response.json();
+        console.log("✅ [Camera] Translation Success:", result);
+
+        // 번역 결과 UI 처리
+        onTranslationComplete(result)
+
+    } catch (error) {
+        console.error("❌ [Camera] Upload Failed:", error);
+        statusText.textContent = "번역 실패";
+        alert("번역 중 오류가 발생했습니다.");
+
+    } finally {
+        if (videoLoading) videoLoading.classList.add('hidden');
+        startBtn.disabled = false;
+    }
+}
 
 // ===== 닫기 =====
 function closeCamera() {
     console.log("📷 [Camera] Close Camera")
-    
-    isCapturing = false;
-    hideLoading();
 
+    // 스트림 정지 (카메라 불 끄기)
     if (stream) {
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach(track => track.stop());
         stream = null;
     }
-
-    video.onended = null;
-
+    
+    // 비디오 소스 초기화
     video.srcObject = null;
-    video.style.display = "block"; // 다음 오픈을 위해 복구
-    cameraControls.classList.remove("hidden"); // 제어 버튼 복구
-    translationResult.classList.add("hidden"); // 결과창 초기화
-    statusText.classList.remove("active");
-
+    
+    // UI 닫기
     modal.style.display = "none";
     overlay.style.display = "none";
+    
+    // 상태 초기화
+    video.style.display = "block";
+    cameraControls.classList.remove("hidden");
+    translationInput.value = "";
+    translationResult.classList.add("hidden");
+    statusText.textContent = "";
 }
 
 closeBtn.addEventListener("click", closeCamera);
 
-// ===== 번역 결과 수신 및 자동 처리 =====
-socket.on("translation_result", (data) => {
-    console.log("📤 [Socket] 번역 결과 수신:", data.message);
-    onTranslationComplete(data);
-});
-
 // 번역 완료 처리: '번역 완료' 표시 → 카메라 종료 → 입력창에 텍스트 입력
 function onTranslationComplete(data) {
     
-    // 1. 로딩바 숨기기
+    // 로딩바 숨기기
     hideLoading();
 
-    // 2. 카메라 제어 영역과 비디오 숨기기
+    // 카메라 제어 영역과 비디오 숨기기
     if (cameraControls) cameraControls.classList.add("hidden");
     if (video) video.style.display = "none"; // 비디오를 아예 안보이게 처리
     statusText.textContent = "";
 
-    // 3. 번역 결과 입력창 표시
+    // 번역 결과 입력창 표시
     const resultText = data.message;
     if (translationInput && translationResult) {
         translationInput.value = resultText;
@@ -305,54 +225,3 @@ function sendTranslation() {
 
     closeCamera();
 }
-
-// 1. 📁 버튼 클릭 시 파일 선택창 열기
-selectFileBtn.addEventListener("click", () => {
-    videoFileInput.click();
-});
-
-// ===== 📁 파일 첨부 처리 =====
-videoFileInput.addEventListener("change", async () => {
-    // 파일 모드일 때는 정방향
-    video.style.transform = "scaleX(1)";
-    
-    const file = videoFileInput.files[0];
-    if (!file) return;
-
-    console.log("📁 [File] 영상 파일 선택:", file.name);
-
-    isFileMode = true;
-
-    // 기존 웹캠 스트림 종료
-    if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
-    }
-
-    // 기존 Object URL 해제
-    if (fileObjectURL) {
-        URL.revokeObjectURL(fileObjectURL);
-        fileObjectURL = null;
-    }
-
-    // 파일을 video 태그에 로드
-    fileObjectURL = URL.createObjectURL(file);
-    video.srcObject = null;
-    video.src = fileObjectURL;
-    video.loop = false;
-    video.muted = true;
-
-    video.onloadedmetadata = async () => {
-        await video.play();
-        video.pause();  // 자동 재생 방지, 시작 버튼으로 제어
-
-        if (!holistic) initHolistic();
-
-        statusText.textContent = `📁 ${file.name} | 시작 버튼을 눌러주세요.`;
-        statusText.classList.add("active");
-        startBtn.disabled = false;
-    };
-
-    // input 초기화 (같은 파일 재선택 가능하도록)
-    videoFileInput.value = "";
-});
