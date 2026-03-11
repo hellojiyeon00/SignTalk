@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import logging
 
-from sign_app.core.redis_client import get_redis, close_redis
 from sign_app.core.model_loader import ModelLoader
 from sign_app.api.model import router as model_router
 
@@ -22,15 +21,6 @@ async def lifespan(app: FastAPI):
         ModelLoader.initialize_all()
     except Exception as e:
         logger.error(f"❌ 모델 로딩 실패: {e}")
-        raise
-    
-    # 2. Redis 연결
-    redis = await get_redis()
-    try:
-        await redis.ping()
-        logger.info("✅ Redis 연결됨")
-    except Exception as e:
-        logger.error(f"❌ Redis 연결 실패: {e}")
         raise
 
     # 3. 모델 상태 확인

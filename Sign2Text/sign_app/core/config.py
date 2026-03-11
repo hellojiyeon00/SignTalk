@@ -8,11 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """애플리케이션 설정 클래스"""
 
-    # Redis 설정
-    REDIS_PASSWORD: str
-    REDIS_HOST: str
-    REDIS_PORT: str
-
     # ===== 모델 경로 =====
     # LSTM
     LSTM_MODEL_PATH: str
@@ -22,11 +17,6 @@ class Settings(BaseSettings):
     LLM_URL: str
     LLM_MODEL: str
     LLM_API_KEY: str
-
-    @property
-    def REDIS_URL(self) -> str:
-        """Redis 연결 URL 생성"""
-        return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}"
 
     # .env 파일 경로 계산 (Sign2Text/model_app/core -> project root)
     _current_file = os.path.abspath(__file__)
