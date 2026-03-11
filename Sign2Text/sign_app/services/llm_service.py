@@ -1,7 +1,7 @@
 import os
 import logging
 from openai import OpenAI
-from model_app.core.config import settings
+from sign_app.core.config import settings
 
 # 로거 설정
 logger = logging.getLogger("llm-service")

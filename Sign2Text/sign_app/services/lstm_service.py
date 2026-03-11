@@ -3,7 +3,7 @@ import numpy as np
 import os
 import tempfile
 import logging
-from model_app.core.model_loader import ModelLoader
+from sign_app.core.model_loader import ModelLoader
 
 logger = logging.getLogger("lstm-service")
 logging.basicConfig(level=logging.INFO)

@@ -4,7 +4,7 @@ import logging
 import os
 import tensorflow as tf
 
-from model_app.core.config import settings
+from sign_app.core.config import settings
 
 logger = logging.getLogger("model-loader")
 logging.basicConfig(level=logging.INFO)

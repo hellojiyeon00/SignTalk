@@ -3,9 +3,9 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import logging
 
-from model_app.core.redis_client import get_redis, close_redis
-from model_app.core.model_loader import ModelLoader
-from model_app.api.model import router as model_router
+from sign_app.core.redis_client import get_redis, close_redis
+from sign_app.core.model_loader import ModelLoader
+from sign_app.api.model import router as model_router
 
 logger = logging.getLogger("model-server")
 logging.basicConfig(level=logging.INFO)

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, File, UploadFile, Form
 import logging
 
-from model_app.services.lstm_service import transfer_sign2gloss
-from model_app.services.llm_service import transfer_gloss2text
+from sign_app.services.lstm_service import transfer_sign2gloss
+from sign_app.services.llm_service import transfer_gloss2text
 
 # 로거 설정
 logger = logging.getLogger("model-api")

@@ -1,6 +1,6 @@
 import redis.asyncio as redis
 
-from model_app.core.config import settings
+from sign_app.core.config import settings
 
 # 전역 Redis 클라이언트
 redis_client = None
