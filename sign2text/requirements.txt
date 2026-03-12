@@ -1,0 +1,37 @@
+# ── model/requirements.txt ───────────────────────────────────────
+# FastAPI 코어
+fastapi==0.128.0
+uvicorn==0.39.0
+starlette==0.49.3
+
+# torch는 Dockerfile에서 CPU 버전으로 별도 설치
+# torch==2.6.0  →  pip install torch --index-url .../cpu
+
+# 수치 연산
+numpy==2.0.2
+
+# Redis (프레임 버퍼 캐싱)
+redis==7.0.1
+
+# LLM API (gloss → 자연어)
+openai==2.24.0
+httpx==0.28.1
+httpcore==1.0.9
+
+# Pydantic
+pydantic==2.12.5
+pydantic-settings==2.11.0
+pydantic_core==2.41.5
+annotated-types==0.7.0
+
+# 공통 유틸
+python-dotenv==1.2.1
+anyio==4.12.1
+sniffio==1.3.1
+h11==0.16.0
+uvloop==0.22.1
+certifi==2026.1.4
+idna==3.11
+typing_extensions==4.15.0
+jiter==0.13.0
+distro==1.9.0

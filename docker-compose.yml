@@ -128,7 +128,7 @@ services:
   x-airflow-common: &airflow-common
     build:
       context: .
-      dockerfile: data_pipeline/Dockerfile
+      dockerfile: airflow/Dockerfile
     env_file: .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -139,8 +139,8 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Seoul
     volumes:
-      # DAG 파일 + 수집 스크립트가 모두 data_pipeline/ 에 위치
-      - ./data_pipeline:/opt/airflow/dags:ro
+      # DAG 파일 + 수집 스크립트가 모두 airflow/ 에 위치
+      - ./airflow:/opt/airflow/dags:ro
       - airflow_logs:/opt/airflow/logs
     networks:
       - signtalk-net
@@ -225,7 +225,7 @@ services:
   model-app:
     build:
       context: .
-      dockerfile: model/Dockerfile
+      dockerfile: sign2text/Dockerfile
     container_name: signtalk-model-app
     env_file: .env
     ports:
@@ -236,15 +236,15 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      # 호스트의 model/LSTM/ → 컨테이너 /app/model/LSTM/
-      - ./model/LSTM:/app/model/LSTM:ro
+      # 호스트의 sign2text/assets/LSTM/ → 컨테이너 /app/model/LSTM/
+      - ./sign2text/assets/LSTM:/app/model/LSTM:ro
     restart: unless-stopped
     logging: *default-logging
 
   model-server:
     build:
       context: .
-      dockerfile: model_server/Dockerfile
+      dockerfile: text2sign/Dockerfile
     container_name: signtalk-model-server
     env_file: .env
     ports:
@@ -252,8 +252,8 @@ services:
     networks:
       - signtalk-net
     volumes:
-      # 호스트의 model_server/assets/ → 컨테이너 /app/assets/
-      - ./model_server/assets:/app/assets:ro
+      # 호스트의 text2sign/assets/ → 컨테이너 /app/assets/
+      - ./text2sign/assets:/app/assets:ro
     restart: unless-stopped
     logging: *default-logging
 

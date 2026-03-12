@@ -61,12 +61,12 @@ fi
 # ── STEP 3. 모델 가중치 존재 여부 안내 ───────────────────────
 step "STEP 3 / 6 — 모델 가중치 확인"
 MISSING=0
-if [ ! -f "model_server/assets/fasttext/cc.ko.300.bin" ]; then
-  warn "누락: model_server/assets/fasttext/cc.ko.300.bin (~6.8GB)"
+if [ ! -f "text2sign/assets/fasttext/cc.ko.300.bin" ]; then
+  warn "누락: text2sign/assets/fasttext/cc.ko.300.bin (~6.8GB)"
   MISSING=1
 fi
-if [ ! -d "model_server/assets/kobart/final_model_checkpoint-17800" ]; then
-  warn "누락: model_server/assets/kobart/final_model_checkpoint-17800/ (~473MB)"
+if [ ! -d "text2sign/assets/kobart/final_model_checkpoint-17800" ]; then
+  warn "누락: text2sign/assets/kobart/final_model_checkpoint-17800/ (~473MB)"
   MISSING=1
 fi
 if [ "$MISSING" -eq 1 ]; then

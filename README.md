@@ -118,7 +118,7 @@
 ## 6. 📁 프로젝트 구조
 
 ```
-SignLanguageTalk/
+SignTalk/
 │
 ├── backend/               # FastAPI 백엔드
 │   └── app/
@@ -132,17 +132,18 @@ SignLanguageTalk/
 │   ├── js/                # JavaScript 로직
 │   └── *.html
 │
-├── model/                 # Model App — LSTM 수어 인식 (FastAPI)
-│   ├── model_app/         # FastAPI 앱
-│   └── LSTM/              # 모델 가중치 (lstm.pt, label.csv)
+├── sign2text/                 # Model App — LSTM 수어 인식 (FastAPI)
+│   ├── models/         # FastAPI 앱
+│   └── assets/              # 모델 가중치 (lstm.pt, label.csv)
+│       └── LSTM/        # (lstm.pt, label.csv)
 │
-├── model_server/          # Model Server — KoBART + FastText (FastAPI)
+├── text2sign/          # Model Server — KoBART + FastText (FastAPI)
 │   ├── models/            # 추론 로직 (kobart/, fasttext/)
 │   └── assets/            # 모델 가중치 ⚠️ 별도 배치 필요
 │       ├── kobart/        # KoBART 체크포인트 (~473MB)
 │       └── fasttext/      # FastText 임베딩 cc.ko.300.bin (~6.8GB)
 │
-├── data_pipeline/         # Airflow DAGs + Spark 스크립트
+├── airflow/                # Airflow DAGs
 ├── hadoop/                # Hadoop App — HDFS 연동 (FastAPI)
 ├── ai_models/             # 모델 학습 스크립트
 ├── postgres/              # DB 초기화 SQL (init.sql — 컨테이너 최초 기동 시 자동 실행)
@@ -269,10 +270,10 @@ openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
 
 | 파일 | 크기 | 배치 경로 |
 |---|---|---|
-| `cc.ko.300.bin` | ~6.8GB | `model_server/assets/fasttext/` |
-| KoBART 체크포인트 | ~473MB | `model_server/assets/kobart/final_model_checkpoint-17800/` |
+| `cc.ko.300.bin` | ~6.8GB | `text2sign/assets/fasttext/` |
+| KoBART 체크포인트 | ~473MB | `text2sign/assets/kobart/final_model_checkpoint-17800/` |
 
-> `model/LSTM/lstm.pt` (31MB)는 git에 포함되어 있어 별도 배치 불필요
+> `sign2text/assets/LSTM/lstm.pt` (31MB)는 git에 포함되어 있어 별도 배치 불필요
 
 ---
 
@@ -391,19 +392,6 @@ docker compose up -d airflow-webserver airflow-scheduler
 >   | hadoop-app | `docker-compose.yml` ports + `.env` HADOOP_API_URL |
 
 ---
-
-### 전체 서비스 중지
-
-```bash
-# 컨테이너 중지 (데이터 유지)
-docker compose down
-
-# 컨테이너 + 볼륨 전체 삭제 (데이터 초기화)
-docker compose down -v
-```
-
----
-
 ### 전체 서비스 시작
 
 ```bash
@@ -434,6 +422,16 @@ docker compose logs -f redis postgres
 
 # 최근 N줄만 출력 후 실시간 추적
 docker compose logs -f --tail=100 backend
+```
+
+### 전체 서비스 중지
+
+```bash
+# 컨테이너 중지 (데이터 유지)
+docker compose down
+
+# 컨테이너 + 볼륨 전체 삭제 (데이터 초기화)
+docker compose down -v
 ```
 
 ---
