@@ -113,10 +113,10 @@ torchaudio==2.6.0+cu124
 # remove nvidia-* pins and rely on conda/cuda system libs instead.
 
 # Linux 설치 시
-# bcrypt==3.1.7
-# fasttext==0.9.3
-# uvloop==0.22.1
+bcrypt==3.1.7
+fasttext==0.9.3
+uvloop==0.22.1
 
 # Window 설치 시
-bcrypt
-fasttext-wheel
+# bcrypt
+# fasttext-wheel
