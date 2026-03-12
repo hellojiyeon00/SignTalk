@@ -1,0 +1,25 @@
+
+
+corpus_data_20260205.jsonl (AWS test/corpus raw data에서 추출한 결과물 jsonl)
+
+: 데이터 활용 파일명 포함 (text / gloss / origin)
+
+---
+
+kobart_data.jsonl
+
+: 모델 학습을 위해 origin 제거 (text / gloss)
+
+---
+
+sign_mp4_url.csv
+
+: FastText Vector DB 처리를 위해 수집 1 (word / video_url / origin_word / detail_url)
+
+---
+
+vector_url.json
+
+: FastText Vector DB 처리를 위해 수집 2 (word / url / vector)
+
+

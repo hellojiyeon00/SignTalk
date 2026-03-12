@@ -1,0 +1,51 @@
+
+
+sign_url_api.ipynb
+
+: 한국어 수어 사전 open api 데이터 크롤링 스크립트
+
+---
+
+create_vector_db.py
+
+: FastText 모델 사용 300 dim Vector 추출 스크립트
+
+---
+
+1. processing.py [역할] 원천(Raw) 데이터 추출 및 1차 통합본 생성
+
+	1) 대상: AWS /test/corpus 내 수만 개의 개별 .json 파일 (병렬 말뭉치)
+
+	2) 주요 기능
+
+	- 개별 JSON 파일에서 koreanText와 gloss_id 리스트를 추출하여 매칭.
+
+	- 전체 통합본 추출: 모든 카테고리를 포함한 corpus_data_YYYYMMDD.jsonl 생성 (Text-Gloss-Origin 포함).
+
+	- 1차 필터링: 추출 과정에서 파일명을 기준으로 금융(FI) 데이터를 제외한 corpus_train_data_YYYYMMDD.jsonl 동시 생성.
+
+---
+
+2. kobart_data.py [역할] 학습 전용 최종 데이터 정제 (Lightweight Refinement)
+
+	1) 대상: 위 단계에서 생성된 통합본(corpus_data_20260205.jsonl)
+
+	2) 주요 기능
+
+	- 최종 필터링: 통합본의 origin 경로를 다시 확인하여 금융(FI) 키워드 데이터 재검증 및 제외.
+
+	- 데이터 경량화: 학습에 불필요한 origin 필드를 제거하고 오직 text와 gloss 필드만 남김.
+
+	- 최종 결과물: kobart_data.jsonl (KoBART 모델 학습에 즉시 투입되는 최종본).
+
+---
+
+split_kobart_dataset.py
+
+: KoBART 학습 데이터 분할을 위한 스크립트 (full.jsonl / train.jsonl / valid.jsonl / text.jsonl)
+
+---
+
+train.py (활용파일: config.yaml)
+
+: KoBART 1회 학습 스크립트

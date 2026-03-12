@@ -1,0 +1,18 @@
+
+trainer_state.json
+
+: KoBART 학습 결과 요약 메타데이터 (global_step / best_model_checkpoint / best_metric / log_history)
+	- 결과 요약 (best step / best loss 확인)
+
+---
+
+events.out.tfevents.1770594586.ip-172-31-13-66.3567.0
+
+: TensorBoard용 전체 학습 로그 (train/loss, eval/loss, learning_rate, epoch, step)
+	- 전체 학습 로그 (loss 변화 그래프 분석)
+
+---
+
+full.jsonl / train.jsonl / valid.jsonl / test.jsonl
+
+: KoBART 학습 관련 데이터
