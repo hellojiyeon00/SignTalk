@@ -32,7 +32,9 @@ async def save_video(
     try:
         file_content = await file.read()
         
-        async with httpx.AsyncClient() as client:
+        # verify=False : 비동기 HTTP 클라이언트 생성 시 SSL/TLS 인증서 검증을 비활성화
+        # 메인 서버에서 자가 서명 인증서(Self-signed certificate) 사용 중 
+        async with httpx.AsyncClient(verify=False) as client:
             files = {'file': (file.filename, file_content, file.content_type)}
             data = {'room': room, 'room_id': room_id, 'username': username, 'userno': userno}
             
