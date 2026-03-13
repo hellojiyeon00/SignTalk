@@ -330,10 +330,10 @@ docker exec -it signtalk-postgres \
 
 ```bash
 # 이미지 빌드
-docker compose build backend model-app model-server hadoop-app
+docker compose build backend sign2text text2sign hadoop-app
 
 # 서비스 실행 (Airflow 제외)
-docker compose up -d backend model-app model-server hadoop-app nginx
+docker compose up -d backend sign2text text2sign hadoop-app nginx
 
 # 전체 상태 확인
 docker compose ps
@@ -365,8 +365,8 @@ docker compose up -d airflow-webserver airflow-scheduler
 | Frontend (nginx) | **443** | 메인 진입점 (HTTPS) |
 | Frontend (nginx) | 80 | HTTP → HTTPS 자동 리다이렉트 |
 | Backend (FastAPI) | 8000 | REST API |
-| Model App (LSTM) | 8001 | 수어 인식 모델 |
-| Model Server (KoBART + FastText) | 8002 | 텍스트 변환 모델 |
+| sign2text (LSTM) | 8001 | 수어 인식 모델 |
+| text2sign (KoBART + FastText) | 8002 | 텍스트 변환 모델 |
 | Hadoop App | 8003 | HDFS 연동 |
 | Hadoop NameNode (WebHDFS) | 9870 | HDFS Web UI / WebHDFS API |
 | Airflow | 8080 | 파이프라인 관리 |
@@ -388,7 +388,7 @@ docker compose up -d airflow-webserver airflow-scheduler
 >   | 서비스 | 수정 파일 |
 >   |---|---|
 >   | backend | `docker-compose.yml` ports + `nginx.conf` proxy_pass 4곳 |
->   | model-app / model-server | `docker-compose.yml` ports + `.env` MODEL_API_URL / MODEL_SERVER_URL |
+>   | sign2text / text2sign | `docker-compose.yml` ports + `.env` MODEL_API_URL / MODEL_SERVER_URL |
 >   | hadoop-app | `docker-compose.yml` ports + `.env` HADOOP_API_URL |
 
 ---
@@ -414,7 +414,7 @@ docker compose logs -f
 # 프론트엔드 로그 확인
 docker compose logs -f nginx
 # 백엔드 로그 확인
-docker compose logs -f backend model-app model-server
+docker compose logs -f backend sign2text text2sign
 # DE 로그 확인
 docker compose logs -f airflow-scheduler hadoop-app kafka
 # DB 로그 확인

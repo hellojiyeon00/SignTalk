@@ -222,11 +222,11 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
-  model-app:
+  sign2text:
     build:
       context: .
       dockerfile: sign2text/Dockerfile
-    container_name: signtalk-model-app
+    container_name: signtalk-sign2text
     env_file: .env
     ports:
       - "8001:8001"
@@ -241,11 +241,11 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
-  model-server:
+  text2sign:
     build:
       context: .
       dockerfile: text2sign/Dockerfile
-    container_name: signtalk-model-server
+    container_name: signtalk-text2sign
     env_file: .env
     ports:
       - "8002:8002"

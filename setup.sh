@@ -70,7 +70,7 @@ if [ ! -d "text2sign/assets/kobart/final_model_checkpoint-17800" ]; then
   MISSING=1
 fi
 if [ "$MISSING" -eq 1 ]; then
-  warn "위 모델 가중치가 없으면 model-server가 정상 동작하지 않습니다."
+  warn "위 모델 가중치가 없으면 text2sign이 정상 동작하지 않습니다."
   warn "팀 내부 공유 경로(Google Drive 등)에서 받아 배치 후 재실행하세요."
   warn "지금은 가중치 없이 계속 진행합니다..."
 else
@@ -103,10 +103,10 @@ fi
 # ── STEP 5. 애플리케이션 빌드 및 실행 ───────────────────────
 step "STEP 5 / 6 — 애플리케이션 빌드 및 실행"
 info "이미지를 빌드합니다 (시간이 걸릴 수 있습니다)..."
-docker compose build backend model-app model-server hadoop-app
+docker compose build backend sign2text text2sign hadoop-app
 
 info "전체 서비스를 실행합니다..."
-docker compose up -d backend model-app model-server hadoop-app nginx
+docker compose up -d backend sign2text text2sign hadoop-app nginx
 
 # ── STEP 6. Airflow 초기화 및 실행 ──────────────────────────
 step "STEP 6 / 6 — Airflow 초기화 및 실행"
