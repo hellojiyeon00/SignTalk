@@ -224,4 +224,4 @@ pip-selfcheck.json
 .ionide
 pdf/
 image/
-.png
+data/
