@@ -3,7 +3,6 @@ annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1
 async-timeout==5.0.1
-bcrypt==3.1.7
 bidict==0.23.1
 certifi==2026.1.4
 cffi==2.0.0
@@ -65,21 +64,28 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 urllib3==2.6.3
 uvicorn==0.39.0
-uvloop==0.22.1
 watchfiles==1.1.1
 websockets==15.0.1
 wsproto==1.2.0
 
 # =========================
+# Sign2Text
+# =========================
+numpy==1.23.5
+opencv-python==4.9.0.80
+opencv-contrib-python==4.9.0.80
+mediapipe==0.10.9
+tensorflow==2.15.0
+openai==2.24.0
+
+# =========================
 # Text2Sign (model_server) additions (Python 3.9 compatible)
 # =========================
-fasttext==0.9.3
 transformers==4.46.3
 tokenizers==0.20.3
 huggingface-hub>=0.23.2,<1.0
 safetensors==0.7.0
 tqdm==4.67.3
-numpy==2.0.2
 regex==2026.1.15
 filelock==3.19.1
 fsspec==2025.10.0
@@ -105,4 +111,12 @@ torchaudio==2.6.0+cu124
 
 # (Optional) If you ever need to avoid pulling NVIDIA CUDA libs via pip,
 # remove nvidia-* pins and rely on conda/cuda system libs instead.
-openai==2.24.0
+
+# Linux 설치 시
+bcrypt==3.1.7
+fasttext==0.9.3
+uvloop==0.22.1
+
+# Window 설치 시
+# bcrypt
+# fasttext-wheel

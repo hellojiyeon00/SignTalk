@@ -18,6 +18,7 @@ from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.disaster import router as disaster_router
 from app.api.location import router as location_router
+from app.api.sign2text import router as sign2text_router
 from app.api.sockets import sio
 from app.services.disaster_service import DisasterService
 
@@ -66,6 +67,7 @@ app.include_router(auth_router, prefix="/auth", tags=["인증"]) # 인증 관련
 app.include_router(chat_router, prefix="/chat", tags=["채팅"]) # 채팅 관련 API는 /chat 경로로 접근
 app.include_router(disaster_router, prefix="/disaster", tags=["재난문자"]) # 재난문자 관련 API는 /disaster 경로로 접근
 app.include_router(location_router, prefix="/location", tags=["위치"]) # 위치 관련 API는 /location 경로로 접근
+app.include_router(sign2text_router, prefix="/sign2text", tags=["수어번역"]) # 수어번역 관련 API는 /sign2text 경로로 접근
 
 # 프론트엔드 정적 파일 서빙 (루트 경로)
 # 경로: SignTalk/Backend/app/main.py 기준 SignTalk/Frontend
