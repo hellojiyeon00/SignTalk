@@ -3,16 +3,22 @@ import urllib.parse
 import psycopg2
 import json
 import math
+import os
+from dotenv import load_dotenv
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from kafka import KafkaProducer
-v_service_key = '2A5TIEB9124AU48F'
-v_base_url = 'https://www.safetydata.go.kr/V2/api/DSSP-IF-00247'
-v_db_host = '56.155.47.51'
-v_db_port = 5432
-v_db_name = 'multicampus_db'
-v_db_user = 'multicampus_user'
-v_db_password = 'multicampuscci4'
+
+# .env 파일 로드
+load_dotenv()
+
+v_service_key = os.getenv("RESTAPI_SERVICE_KEY")
+v_base_url = os.getenv("RESTAPI_BASE_URL")
+v_db_host = os.getenv("DB_HOST")
+v_db_port = os.getenv("DB_PORT")
+v_db_name = os.getenv("DB_NAME")
+v_db_user = os.getenv("DB_USER")
+v_db_password = os.getenv("DB_PASSWORD")
 v_num_of_rows = 1000
 def f_main():
    print(f'[{f_now()}] Disaster Collector Start!')
